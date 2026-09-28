@@ -1,0 +1,15 @@
+.venv/
+.venv-detector/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+dist/
+.DS_Store
+*.egg-info/
+.hf-cache/
+.modelscope/
+*.safetensors
+experiments/models/
+/experiments/benchmark-private/
+/experiments/vanguard-result.json

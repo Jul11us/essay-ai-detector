@@ -1,0 +1,1 @@
+﻿from app.scoring import score_paragraph; from app.loader import ModelHub; hub = ModelHub(); hub._load_all(); zh_text = '中国' * 1000; print(score_paragraph(zh_text, hub._tokenizers['zh'], hub._models['zh'], head=hub._heads['zh'], ai_index=hub._ai_index['zh']))

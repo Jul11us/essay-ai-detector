@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Essay AI Detector logo">
+  <rect width="96" height="96" rx="23" fill="#183d35"/>
+  <rect x="22" y="18" width="47" height="59" rx="7" fill="#f5f4ec"/>
+  <path d="M32 33h27M32 43h20M32 53h14" stroke="#a7bdb5" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="60" cy="60" r="12" fill="#e89172" stroke="#183d35" stroke-width="5"/>
+  <path d="m69 69 9 9" stroke="#e89172" stroke-width="7" stroke-linecap="round"/>
+</svg>

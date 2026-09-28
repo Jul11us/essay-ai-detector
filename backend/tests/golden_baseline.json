@@ -1,0 +1,55 @@
+{
+  "en_essay": {
+    "score": 0.9522,
+    "verdict": "high",
+    "confidence": "medium",
+    "mixed_variance": true,
+    "char_count": 1367,
+    "paragraph_scores": [
+      0.0717,
+      0.987,
+      0.9806,
+      1.0,
+      1.0
+    ],
+    "paragraph_verdicts": [
+      "low",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "paragraph_char_counts": [
+      58,
+      359,
+      350,
+      323,
+      277
+    ],
+    "review_risk": "likely_flag"
+  },
+  "zh_doc": {
+    "score": 0.8889,
+    "verdict": "high",
+    "confidence": "medium",
+    "mixed_variance": false,
+    "char_count": 980,
+    "paragraph_scores": [
+      0.9992,
+      0.7055
+    ],
+    "paragraph_verdicts": [
+      "high",
+      "uncertain"
+    ],
+    "paragraph_char_counts": [
+      612,
+      368
+    ],
+    "review_risk": "likely_flag"
+  },
+  "zh_label_probe": {
+    "ai_style": 0.9993664622306824,
+    "human_style": 0.4591103494167328
+  }
+}
