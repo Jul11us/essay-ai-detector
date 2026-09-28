@@ -45,7 +45,7 @@
 需要 Windows、Python 3.11+ 和 Node.js 20+。首次安装依赖与下载模型需要联网，模型权重不会提交到 GitHub。以下命令在项目根目录的 PowerShell 中执行：
 
 ```powershell
-py -3.12 -m venv .venv-detector
+py -3 -m venv .venv-detector
 .\.venv-detector\Scripts\python.exe -m pip install -r backend\requirements.txt
 npm --prefix frontend ci
 .\.venv-detector\Scripts\python.exe experiments\download_model.py

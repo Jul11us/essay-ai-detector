@@ -14,7 +14,7 @@
 在项目根目录的 PowerShell 执行：
 
 ```powershell
-py -3.12 -m venv .venv-detector
+py -3 -m venv .venv-detector
 .\.venv-detector\Scripts\python.exe -m pip install -r backend\requirements.txt
 npm --prefix frontend ci
 .\.venv-detector\Scripts\python.exe experiments\download_model.py
