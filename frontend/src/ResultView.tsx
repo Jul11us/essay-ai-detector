@@ -9,6 +9,7 @@ import {
   isShortParagraph,
 } from "./copy";
 import { jumpTo, sentenceDomId } from "./domIds";
+import { buildResultCsv, buildResultJson, downloadCsv, downloadJson } from "./export";
 import { Para } from "./ParagraphView";
 import { buildReportHtml, downloadReport, printReport } from "./report";
 import type { DetectOk } from "./types";
@@ -103,6 +104,12 @@ export function ResultCard({
         </button>
         <button type="button" className="text-btn" onClick={() => printReport(buildReportHtml(data))}>
           打印报告
+        </button>
+        <button type="button" className="text-btn" onClick={() => downloadJson(buildResultJson(data), "ai-rate-result.json")}>
+          导出 JSON
+        </button>
+        <button type="button" className="text-btn" onClick={() => downloadCsv(buildResultCsv(data), "ai-rate-result.csv")}>
+          导出 CSV
         </button>
         <button type="button" className="text-btn" onClick={() => onSaveBaseline(data)}>
           {hasBaseline ? "用现在这份覆盖初稿" : "记下这份为初稿"}

@@ -3,6 +3,7 @@ import { isSectionErr } from "./types";
 import { CONF_LABEL, VERDICT_LABEL, formatPercent, isShortParagraph } from "./copy";
 import { suspectKey, topSuspects } from "./aggregate";
 import { composition, spanPlace } from "./composition";
+import { downloadText } from "./download";
 
 function esc(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => {
@@ -160,13 +161,7 @@ export function buildBilingualReport(data: BilingualOk, generatedAt = ""): strin
 }
 
 export function downloadReport(html: string, filename: string): void {
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadText(html, filename, "text/html");
 }
 
 export function printReport(html: string): void {
