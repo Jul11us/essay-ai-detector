@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.bilingual import run_bilingual
 from app.errors import DetectError
 from app.extract import MAX_UPLOAD_BYTES, extract_from_bytes
+from app.length import PREVIEW_MAX_CHARS, SECTION_MIN_CHARS
 from app.loader import ModelHub
 from app.markers import find_markers
 from app.pipeline import require_lang, run_detect, run_sentences
@@ -146,8 +147,9 @@ def _sentences(cancel, lang, text):
     )
 
 
-def _form_str(form, key: str) -> str | None:
-    value = form.get(key)
+def _str_field(source, key: str) -> str | None:
+    """表单或 JSON 里的字符串字段；缺失或类型不对一律当没给。"""
+    value = source.get(key)
     return value if isinstance(value, str) else None
 
 
@@ -178,8 +180,8 @@ async def preview(request: Request):
         extract_from_bytes, getattr(upload, "filename", "") or "", raw
     )
     return {
-        "text": extracted.text[:5000],
-        "truncated": len(extracted.text) > 5000,
+        "text": extracted.text[:PREVIEW_MAX_CHARS],
+        "truncated": len(extracted.text) > PREVIEW_MAX_CHARS,
         "char_count": len(extracted.text),
         "paragraph_count": len(extracted.natural_paragraphs or ()),
     }
@@ -199,9 +201,9 @@ async def detect(request: Request):
         _reject_oversized(request, slack=_MULTIPART_SLACK)
         form = await request.form()
         lang = form.get("lang")
-        text = _form_str(form, "text")
-        en = _form_str(form, "en")
-        zh = _form_str(form, "zh")
+        text = _str_field(form, "text")
+        en = _str_field(form, "en")
+        zh = _str_field(form, "zh")
         upload = form.get("file")
         if upload is not None and hasattr(upload, "read"):
             file_bytes = await _read_upload(upload)
@@ -212,10 +214,10 @@ async def detect(request: Request):
         _reject_oversized(request)
         data = await _json_object(request)
         lang = data.get("lang")
-        text = data.get("text") if isinstance(data.get("text"), str) else None
-        en = data.get("en") if isinstance(data.get("en"), str) else None
-        zh = data.get("zh") if isinstance(data.get("zh"), str) else None
-        scope = data.get("scope") if isinstance(data.get("scope"), str) else None
+        text = _str_field(data, "text")
+        en = _str_field(data, "en")
+        zh = _str_field(data, "zh")
+        scope = _str_field(data, "scope")
     # 先校验语言再问模型：否则 lang=fr 且模型未加载时会返回 503 而不是 400。
     lang = require_lang(lang)
     hub.assert_ready(lang)
@@ -224,7 +226,7 @@ async def detect(request: Request):
             request, _bilingual, text, en, zh, filename, file_bytes
         )
     # 单段重测不能套整篇的 200 字符下限，否则改一句就被拒。
-    floor = 20 if scope == "paragraph" else None
+    floor = SECTION_MIN_CHARS if scope == "paragraph" else None
     return await run_until_disconnect(
         request, _detect_document, lang, text, filename, file_bytes, floor
     )
@@ -239,7 +241,7 @@ async def sentences(request: Request):
     if lang == "bi":
         raise DetectError("lang_required")
     hub.assert_ready(lang)
-    text = data.get("text") if isinstance(data.get("text"), str) else None
+    text = _str_field(data, "text")
     return await run_until_disconnect(request, _sentences, lang, text)
 
 
@@ -251,5 +253,5 @@ async def explain_view(request: Request):
     lang = require_lang(data.get("lang"))
     if lang == "bi":
         raise DetectError("lang_required")
-    text = data.get("text") if isinstance(data.get("text"), str) else ""
+    text = _str_field(data, "text") or ""
     return {"markers": find_markers(text, lang), "rhythm": measure_rhythm(text)}

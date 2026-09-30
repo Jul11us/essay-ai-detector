@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from app.aggregate import HIGH_SCORE
+
 _BLOCKS = re.compile(r"\n+")
 _END = re.compile(r"(?<=[。！？!?；;])\s*|(?<=[.!?])\s+")
 # 「Dr. Smith」这类缩写不该在句点处被切断。
@@ -16,7 +18,7 @@ _ABBREV_END = re.compile(
 # 单元上限是中文 800 字 / 英文 1200 字符，正常不会超过这个数。
 MAX_SENTENCES = 40
 MIN_SENTENCE_CHARS = 8
-HIGHLIGHT_HIGH = 0.75
+HIGHLIGHT_HIGH = HIGH_SCORE
 HIGHLIGHT_MID = 0.60
 
 

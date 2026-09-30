@@ -6,6 +6,12 @@ from statistics import pstdev
 from app.length import count_chars, count_words
 
 
+# 判定门槛。尚未用带真值的样本校准，见 docs/benchmark.md。
+# 段落和整篇共用同一组，逐句着色的门槛在 sentences.py 里引用它。
+LOW_SCORE = 0.40
+HIGH_SCORE = 0.75
+
+
 @dataclass(frozen=True)
 class ParagraphScore:
     index: int
@@ -35,9 +41,9 @@ def excerpt(text: str, limit: int = 80) -> str:
 
 
 def paragraph_verdict(score: float) -> str:
-    if score < 0.40:
+    if score < LOW_SCORE:
         return "low"
-    if score >= 0.75:
+    if score >= HIGH_SCORE:
         return "high"
     return "uncertain"
 
@@ -60,9 +66,9 @@ def aggregate(paragraphs: list[str], probs: list[float], lang: str) -> Aggregate
     else:
         confidence = "medium"
     mixed_variance = std >= 0.25
-    if score < 0.40:
+    if score < LOW_SCORE:
         verdict = "low"
-    elif score >= 0.75 and confidence != "low":
+    elif score >= HIGH_SCORE and confidence != "low":
         verdict = "high"
     else:
         verdict = "uncertain"

@@ -7,7 +7,7 @@ from app.errors import DISCLAIMER, DetectError
 from app.explain import basis, explain, reading, review_outlook
 from app.extract import ExtractedText, extract_from_bytes
 from app.language import check_language
-from app.length import check_length, count_chars
+from app.length import SENTENCE_REVIEW_MAX_CHARS, check_length, count_chars
 from app.markers import find_markers
 from app.paragraphs import prepare_scoring_text, split_paragraphs
 from app.rhythm import measure_rhythm
@@ -128,7 +128,7 @@ def run_sentences(
     raw = (text or "").strip()
     if not raw:
         raise DetectError("empty")
-    if count_chars(raw) > 8000:
+    if count_chars(raw) > SENTENCE_REVIEW_MAX_CHARS:
         raise DetectError("too_long")
     pieces = split_sentences(raw)
     if not pieces:
