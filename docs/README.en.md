@@ -34,6 +34,6 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and wait for the English-rea
 
 For development and tests, see [local-development.md](local-development.md). The service is **not deployed online**. Account, usage-limit, and payment features are not implemented.
 
-## License status
+## License
 
-No license has yet been assigned to this project's source code. Public visibility does not itself grant reuse rights. Check each model's own license separately.
+The project's source code is released under the [MIT License](../LICENSE). The license covers this repository's code only: the model weights (English Vanguard, Chinese zhv3) are not included and each has its own license on its model page. Check those terms separately before any commercial or hosted use. Open-sourcing the code does not change the limits on how to read the scores.
