@@ -1,5 +1,5 @@
 import type { BatchRow } from "./batch";
-import { VERDICT_LABEL, formatPercent } from "./copy";
+import { AI_RATE_LABEL, AI_RATE_NOTE, VERDICT_LABEL, formatPercent } from "./copy";
 import { buildBatchCsv, downloadCsv } from "./export";
 import type { DetectOk } from "./types";
 
@@ -54,7 +54,7 @@ export function BatchPanel({
           <tr>
             <th scope="col">文件</th>
             <th scope="col">状态</th>
-            <th scope="col">模型原始分数</th>
+            <th scope="col">{AI_RATE_LABEL}</th>
             <th scope="col">档位</th>
             <th scope="col">
               <span className="sr-only">操作</span>
@@ -88,7 +88,7 @@ export function BatchPanel({
         </tbody>
       </table>
       <p className="fine">
-        分数是各文件单独计算的模型原始分数，未经样本校准。不要用它在文件之间排名，也不能据此认定某个文件的来源。
+        {AI_RATE_NOTE}各文件单独计算，不能据此认定文字来源。
       </p>
     </section>
   );

@@ -3,6 +3,8 @@ import { CompositionPanel } from "./CompositionPanel";
 import { suspectKey, topSuspects, type Suspect } from "./aggregate";
 import { composition } from "./composition";
 import {
+  AI_RATE_LABEL,
+  AI_RATE_NOTE,
   CONF_LABEL,
   SHORT_PARAGRAPH_CHARS,
   formatPercent,
@@ -73,9 +75,9 @@ export function ResultCard({
   const topKeys = new Set(suspects.map((s) => suspectKey(s.paraIndex, s.sentIndex)));
 
   const headline = {
-    low: "模型倾向较低",
-    uncertain: "模型暂时无法明确判断",
-    high: "模型倾向较高",
+    low: "AI 写作倾向较低",
+    uncertain: "AI 写作倾向不确定",
+    high: "AI 写作倾向较高",
   }[data.verdict];
 
   return (
@@ -89,10 +91,10 @@ export function ResultCard({
             : "请先看标记的原句和上下文。单个分数不能证明文字来源。"}</p>
           {data.mixed_variance && <p className="mix">各段差异较大，建议逐段查看。</p>}
         </div>
-        <div className="result-score">
-          <span>模型原始分数</span>
+        <div className={`result-score ${data.verdict}`} role="group" aria-label={`全文${AI_RATE_LABEL}：${percent}%`}>
+          <span className="result-score-label">全文 AI 率 <span>模型估计</span></span>
           <strong>{percent}%</strong>
-          <small>未经过本站作文样本校准，不是 AI 所写字数比例</small>
+          <small>{AI_RATE_NOTE}</small>
         </div>
       </div>
       <div className="result-actions">

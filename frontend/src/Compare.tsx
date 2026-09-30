@@ -1,5 +1,5 @@
 import { sameScores } from "./aggregate";
-import { VERDICT_LABEL, formatPercent } from "./copy";
+import { AI_RATE_LABEL, VERDICT_LABEL, formatPercent } from "./copy";
 import type { DetectOk } from "./types";
 
 export function Compare({ before, after }: { before: DetectOk; after: DetectOk }) {
@@ -19,7 +19,7 @@ export function Compare({ before, after }: { before: DetectOk; after: DetectOk }
     <section className="compare">
       <h2>修改前后</h2>
       <p className="compare-total">
-        初稿 {formatPercent(before.score)}%（{VERDICT_LABEL[before.verdict]}） → 现在{" "}
+        {AI_RATE_LABEL}：初稿 {formatPercent(before.score)}%（{VERDICT_LABEL[before.verdict]}） → 现在{" "}
         {formatPercent(after.score)}%（{VERDICT_LABEL[after.verdict]}）
       </p>
       <ol>

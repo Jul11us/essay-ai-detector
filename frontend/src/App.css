@@ -871,7 +871,7 @@ textarea:disabled {
 
 .result-heading {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(190px, 250px);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
   gap: 1.5rem;
   align-items: center;
   padding: 1.7rem 2rem;
@@ -903,30 +903,49 @@ textarea:disabled {
 }
 
 .result-score {
-  border-left: 2px solid #c8bca9;
-  padding-left: 1.15rem;
+  --score-color: #2f4a3c;
+  border: 1px solid #d9ccb8;
+  border-top: 3px solid var(--score-color);
+  padding: 1rem 1.2rem;
+  background: #fffaf2;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
 
-.result-score span {
-  color: #6b5e4e;
-  font-size: 0.78rem;
+.result-score.high { --score-color: #a3261a; }
+.result-score.uncertain { --score-color: #785422; }
+
+.result-score-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: #302b24;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.result-score-label span {
+  border: 1px solid #d9ccb8;
+  padding: 0.1rem 0.4rem;
+  color: #655a4a;
+  font-size: 0.7rem;
+  font-weight: 400;
 }
 
 .result-score strong {
   font-family: "Iowan Old Style", "Palatino Linotype", serif;
-  font-size: 2.55rem;
+  font-size: clamp(3.4rem, 5vw, 4.4rem);
   line-height: 1.1;
+  margin: 0.4rem 0 0.55rem;
   font-variant-numeric: tabular-nums;
-  color: #2f4a3c;
+  color: var(--score-color);
 }
 
 .result-score small {
   color: #6b5e4e;
-  line-height: 1.35;
-  max-width: 13rem;
+  line-height: 1.5;
 }
 
 .result-actions {
@@ -1052,8 +1071,8 @@ input:focus-visible,
 @media (max-width: 560px) {
   .page { width: min(100% - 20px, 1240px); padding-top: 24px; }
   .result-heading { grid-template-columns: 1fr; padding: 1.2rem; gap: 0.8rem; }
-  .result-score { border-left: 0; border-top: 1px solid #d9ccb8; padding: 0.6rem 0 0; }
-  .result-score strong { font-size: 2rem; }
+  .result-score { padding: 0.85rem 1rem; }
+  .result-score strong { font-size: 3.4rem; }
   .result-actions { padding: 0.8rem 1.2rem; gap: 0.45rem 0.9rem; }
   .analysis-sidebar .suspect-row { grid-template-columns: 3.5rem 1fr; }
   .analysis-sidebar .suspect-text { grid-column: 1 / -1; }

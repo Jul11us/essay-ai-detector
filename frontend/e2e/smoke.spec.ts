@@ -25,7 +25,7 @@ test("example text goes from paste to sentence-level result", async ({ page }) =
   await page.getByRole("button", { name: "开始检测" }).click();
 
   await expect(page.getByText("检测结果 · 英文")).toBeVisible();
-  await expect(page.getByText("模型原始分数").first()).toBeVisible();
+  await expect(page.getByText("全文 AI 率")).toBeVisible();
   // 逐句打分在分数之后另起请求，句子变成可点击的色块。
   await expect(page.locator("button.sent-button").first()).toBeVisible();
   await expect(page.getByText("全文分布 · 按模型档位")).toBeVisible();

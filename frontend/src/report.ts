@@ -1,6 +1,6 @@
 import type { BilingualOk, DetectOk, Rhythm } from "./types";
 import { isSectionErr } from "./types";
-import { CONF_LABEL, VERDICT_LABEL, formatPercent, isShortParagraph } from "./copy";
+import { AI_RATE_LABEL, AI_RATE_NOTE, CONF_LABEL, VERDICT_LABEL, formatPercent, isShortParagraph } from "./copy";
 import { suspectKey, topSuspects } from "./aggregate";
 import { composition, spanPlace } from "./composition";
 import { downloadText } from "./download";
@@ -84,9 +84,10 @@ function sectionHtml(data: DetectOk): string {
     ? `<h2>句长波动 · ${esc(data.rhythm.label)}</h2><p>${esc(data.rhythm.note)}</p>${rhythmSvg(data.rhythm)}`
     : "";
   return `
-    <p class="score">模型原始分数 ${formatPercent(data.score)}% · ${VERDICT_LABEL[data.verdict]} · 文本充分度 ${CONF_LABEL[data.confidence]}</p>
+    <p class="score">${AI_RATE_LABEL} ${formatPercent(data.score)}% · ${VERDICT_LABEL[data.verdict]} · 文本充分度 ${CONF_LABEL[data.confidence]}</p>
+    <p>${AI_RATE_NOTE}</p>
     ${compoHtml}
-    <p>原始分数未经本站作文样本校准，也不是 AI 所写字数比例。文本充分度只由长度和段落分数计算。</p>
+    <p>文本充分度只由长度和段落分数计算。</p>
     <h2>各段分布</h2>
     ${bars}
     <h2>写作特征提示</h2>
