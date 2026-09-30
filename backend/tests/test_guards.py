@@ -7,16 +7,10 @@ from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.requests import Request
 
 from app.errors import DetectError
 from app.extract import MAX_UPLOAD_BYTES
-from app.main import _read_upload, _reject_oversized, app, gated, hub
-
-
-def make_request(**headers: str) -> Request:
-    raw = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
-    return Request({"type": "http", "method": "POST", "path": "/api/detect", "headers": raw})
+from app.main import _MULTIPART_SLACK, _read_upload, app, gated, hub
 
 
 def test_invalid_lang_is_400_even_when_models_are_not_ready():
@@ -52,18 +46,61 @@ def test_non_object_json_is_bad_request():
     assert r.json()["error"] == "bad_request"
 
 
-def test_declared_oversize_body_is_rejected_before_parsing():
-    with pytest.raises(DetectError) as ei:
-        _reject_oversized(make_request(**{"content-length": str(MAX_UPLOAD_BYTES + 1)}))
-    assert ei.value.code == "payload_too_large"
+def _chunks(total: int, size: int = 1024 * 1024):
+    """没有 Content-Length 的分块请求体：httpx 遇到生成器会走 chunked。"""
+    sent = 0
+    while sent < total:
+        n = min(size, total - sent)
+        sent += n
+        yield b"x" * n
 
 
-def test_declared_normal_body_passes_the_length_guard():
-    _reject_oversized(make_request(**{"content-length": "1024"}))
+def test_declared_oversize_json_is_rejected():
+    c = TestClient(app)
+    r = c.post(
+        "/api/detect",
+        content=b"{}",
+        headers={"Content-Type": "application/json", "Content-Length": str(MAX_UPLOAD_BYTES + 1)},
+    )
+    assert r.status_code == 400
+    assert r.json()["error"] == "payload_too_large"
 
 
-def test_missing_content_length_does_not_block():
-    _reject_oversized(make_request())
+def test_chunked_oversize_json_is_rejected_without_content_length():
+    """分块传输不带 Content-Length，只能靠实际读到的字节数拦。"""
+    c = TestClient(app)
+    r = c.post(
+        "/api/detect",
+        content=_chunks(MAX_UPLOAD_BYTES + 1),
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 400
+    assert r.json()["error"] == "payload_too_large"
+
+
+def test_chunked_oversize_multipart_is_rejected():
+    c = TestClient(app)
+    r = c.post(
+        "/api/preview",
+        content=_chunks(MAX_UPLOAD_BYTES + _MULTIPART_SLACK + 1),
+        headers={"Content-Type": "multipart/form-data; boundary=x"},
+    )
+    assert r.status_code == 400
+    assert r.json()["error"] == "payload_too_large"
+
+
+def test_normal_chunked_json_still_works():
+    hub.loaded = {"zh": False, "en": True}
+    hub.phase = "ready"
+    c = TestClient(app)
+    body = b'{"lang": "fr", "text": "hello"}'
+    r = c.post(
+        "/api/detect",
+        content=iter([body[:10], body[10:]]),
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 400
+    assert r.json()["error"] == "lang_required"  # 读到了，照常走校验
 
 
 class _EndlessUpload:

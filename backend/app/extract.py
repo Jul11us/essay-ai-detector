@@ -1,4 +1,6 @@
+import codecs
 import re
+import zipfile
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -9,6 +11,16 @@ _ALLOWED = {".txt", ".docx", ".pdf"}
 # 上传上限。作业正文撑死几百 KB，20 MB 留足余量；
 # 没有这个上限时 `await upload.read()` 会把任意大的文件整个读进内存。
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+# 上传体积只约束压缩后的字节数。.docx 本质是 zip，几十 KB 可以解压成几个 GB；
+# python-docx 会把所有成员读进内存。所以解压前先按 zip 目录里声明的大小挡一道
+# （zipfile 读取时不会超出声明大小，这个数是有效的上限）。
+# 错误文案里写了同样的数字（errors.py），改这里要一起改。
+MAX_DOCX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+MAX_DOCX_ENTRIES = 5000
+# 正文最多约 1 万中文字 / 8000 词，也就是二三十页；300 页留足余量，
+# 只为别让一份几千页的 PDF 占着 CPU 逐页抽文字。
+MAX_PDF_PAGES = 300
 
 
 @dataclass(frozen=True)
@@ -38,8 +50,21 @@ def extract_from_bytes(filename: str, data: bytes) -> ExtractedText:
     return _extract_docx(data)
 
 
+# 带 BOM 的编码。Windows 记事本选「Unicode」另存就是 UTF-16 LE，
+# 很多 Windows 程序默认存「UTF-8 带 BOM」；BOM 是最可靠的判断依据。
+_BOMS = (
+    (codecs.BOM_UTF32_LE, "utf-32"),
+    (codecs.BOM_UTF32_BE, "utf-32"),
+    (codecs.BOM_UTF16_LE, "utf-16"),
+    (codecs.BOM_UTF16_BE, "utf-16"),
+    (codecs.BOM_UTF8, "utf-8-sig"),
+)
+
+
 def _decode_txt(data: bytes) -> str:
-    for enc in ("utf-8", "gb18030"):
+    candidates = [enc for bom, enc in _BOMS if data.startswith(bom)]
+    # 没有 BOM 时，GBK 系编码几乎什么字节都能解，所以一定要排在 UTF-8 之后。
+    for enc in (*candidates, "utf-8", "gb18030"):
         try:
             return data.decode(enc)
         except UnicodeDecodeError:
@@ -58,6 +83,8 @@ def _extract_pdf(data: bytes) -> ExtractedText:
                 reader.decrypt("")
             except Exception as exc:
                 raise DetectError("parse_failed") from exc
+        if len(reader.pages) > MAX_PDF_PAGES:
+            raise DetectError("too_many_pages")
         pages = [(page.extract_text() or "") for page in reader.pages]
     except DetectError:
         raise
@@ -69,14 +96,52 @@ def _extract_pdf(data: bytes) -> ExtractedText:
     return ExtractedText(text="\n\n".join(paras), natural_paragraphs=tuple(paras))
 
 
+def _docx_texts(parent_element, parent):
+    """按文档顺序吐出段落文字，表格里的单元格（含嵌套表格）也读。
+
+    `doc.paragraphs` 只有正文层的段落，放在表格里的文字会整个丢掉；
+    作业模板常把正文放进表格，丢了就会得到「没有读到正文」或漏掉一大块。
+    """
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    for child in parent_element.iterchildren():
+        if child.tag == qn("w:p"):
+            text = Paragraph(child, parent).text.strip()
+            if text:
+                yield text
+        elif child.tag == qn("w:tbl"):
+            seen = set()
+            for row in Table(child, parent).rows:
+                for cell in row.cells:
+                    # 合并单元格会在每个被合并的位置重复出现，只读一次。
+                    if cell._tc in seen:
+                        continue
+                    seen.add(cell._tc)
+                    yield from _docx_texts(cell._tc, cell)
+
+
+def _check_docx_archive(data: bytes) -> None:
+    """解压前看 zip 目录：成员太多或声明的解压总量太大就拒绝。"""
+    try:
+        with zipfile.ZipFile(BytesIO(data)) as archive:
+            members = archive.infolist()
+    except Exception as exc:  # BadZipFile、截断、异常的目录项都算读不了
+        raise DetectError("parse_failed") from exc
+    if len(members) > MAX_DOCX_ENTRIES or sum(m.file_size for m in members) > MAX_DOCX_UNCOMPRESSED_BYTES:
+        raise DetectError("archive_too_large")
+
+
 def _extract_docx(data: bytes) -> ExtractedText:
+    _check_docx_archive(data)
     try:
         from docx import Document
 
         doc = Document(BytesIO(data))
+        paras = tuple(_docx_texts(doc.element.body, doc))
     except Exception as exc:
         raise DetectError("parse_failed") from exc
-    paras = tuple(p.text.strip() for p in doc.paragraphs if p.text.strip())
     text = "\n\n".join(paras).strip()
     if not text:
         raise DetectError("empty")

@@ -12,7 +12,7 @@
 
 ## What it does
 
-This work-in-progress site runs locally. Paste text or upload a `.txt`, `.docx`, or text-based PDF to preview extracted content and examine an English or Chinese model signal. Mixed-language documents can be scored by language. The results include paragraph and sentence highlights, a document overview, passages to review, and an HTML export. Inference runs on your machine; essay text is not sent to a third-party scoring API.
+This work-in-progress site runs locally. Paste text or upload a `.txt`, `.docx`, or text-based PDF to preview extracted content and examine an English or Chinese model signal. Mixed-language documents can be scored by language. The results include paragraph and sentence highlights, a document overview, passages to review, and exports to HTML, JSON, and CSV. Select several files at once to score them one by one into a summary table. Inference runs on your machine; essay text is not sent to a third-party scoring API.
 
 ## How to interpret a result
 
@@ -20,7 +20,7 @@ The output is a **writing-pattern signal**, not the percentage of words written 
 
 ## Get started
 
-Use Windows, Python 3.11+, and Node.js 20+. Run from the repository root in PowerShell:
+Use Windows, Python 3.11+, and Node.js 20.19+. Run from the repository root in PowerShell:
 
 ```powershell
 py -3 -m venv .venv-detector
@@ -34,6 +34,6 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173) and wait for the English-rea
 
 For development and tests, see [local-development.md](local-development.md). The service is **not deployed online**. Account, usage-limit, and payment features are not implemented.
 
-## License status
+## License
 
-No license has yet been assigned to this project's source code. Public visibility does not itself grant reuse rights. Check each model's own license separately.
+The project's source code is released under the [MIT License](../LICENSE). The license covers this repository's code only: the model weights (English Vanguard, Chinese zhv3) are not included and each has its own license on its model page. Check those terms separately before any commercial or hosted use. Open-sourcing the code does not change the limits on how to read the scores.

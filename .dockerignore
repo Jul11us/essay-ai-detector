@@ -1,0 +1,18 @@
+.git
+.github
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+.venv-detector
+frontend/playwright-report
+frontend/test-results
+# 权重和私人评测数据绝不进镜像
+experiments/models
+experiments/benchmark-private
+experiments/vanguard-result.json
+docs
+*.bat
+scripts

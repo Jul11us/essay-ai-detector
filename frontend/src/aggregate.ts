@@ -75,6 +75,7 @@ function readingText(result: { score: number; verdict: Verdict }): string {
   );
 }
 
+// 与后端 explain.review_outlook 保持一致：只描述这份分数，不预测学校检测器或老师的判断。
 function reviewOutlook(result: {
   verdict: Verdict;
   confidence: Confidence;
@@ -83,41 +84,40 @@ function reviewOutlook(result: {
 }): { risk: DetectOk["review_risk"]; label: string; detail: string } {
   const hot = result.paragraphs.filter((p) => p.verdict === "high").length;
   const caveat =
-    "这只按本站开源模型估计，不是学校官方审查，也保证不了 Turnitin / 知网 / GPTZero 的结果。";
+    "这只按本站开源模型估计，不是学校官方审查，也不能预测 Turnitin / 知网 / GPTZero 的结果。";
   if (result.confidence === "low") {
     return {
       risk: "unclear",
-      label: "作业审查：材料偏短，没法估会不会被问",
-      detail: "文本偏短或段太少，连本站分数都不稳，更不能用来赌作业能不能过。" + caveat,
+      label: "作业审查：材料偏短，本站分数不稳",
+      detail: "文本偏短或段太少，本站分数本身就不稳，不能据此判断任何结果。" + caveat,
     };
   }
   if (result.verdict === "high" || hot >= 2) {
     return {
       risk: "likely_flag",
-      label: "作业审查：较可能被盯成 AI 文风",
+      label: "作业审查：高分段较多，建议对照原文复核",
       detail:
-        "按本站分数，全文或至少两段更像常见 AI 写法。助教若用类似文风检测，大概率会再看一眼。" +
-        "仍可能是人写得很整齐，但不宜当成「能过」。" +
+        "按本站分数，全文或至少两段更像常见 AI 写法。请对照高分段回看原文。" +
+        "也可能只是人写得很整齐，分数不是生成证据。" +
         caveat,
     };
   }
   if (result.verdict === "uncertain" || hot === 1 || result.mixed_variance) {
     let extra = "";
-    if (hot === 1) extra = "有一段明显高于全文，审查时那一段更容易被点名。";
+    if (hot === 1) extra = "有一段明显高于全文，建议先看那一段。";
     else if (result.mixed_variance) extra = "各段分数差得大，有的像人写、有的更像生成。";
     return {
       risk: "unclear",
-      label: "作业审查：不好说，有可能被问到",
-      detail:
-        "本站没有一边倒。老师抽查或学校检测器口径不同时，过与不过都不意外。" + extra + caveat,
+      label: "作业审查：信号不一致，请逐段查看",
+      detail: "本站没有给出一边倒的结果，不能只看总分。" + extra + caveat,
     };
   }
   return {
     risk: "likely_ok",
-    label: "作业审查：按本站分数，文风上较不易被判高",
+    label: "作业审查：按本站分数，暂未见明显高分段",
     detail:
-      "本站总分偏低，大概率不会被「这一类文风检测」打成明显 AI。" +
-      "这不是过关证明：老师仍可能看内容、引用和是否像套模板；学校系统也可能给完全不同的分。" +
+      "本站总分偏低，各段也没有明显高分。这只说明本模型没有给出高分：" +
+      "不是过关证明，也不能预测学校系统或老师的判断，他们可能看内容、引用，口径也可能不同。" +
       caveat,
   };
 }

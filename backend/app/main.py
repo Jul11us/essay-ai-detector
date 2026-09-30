@@ -2,18 +2,22 @@ import asyncio
 import os
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.bilingual import run_bilingual
+from app.bodylimit import BodyLimitMiddleware
 from app.errors import DetectError
 from app.extract import MAX_UPLOAD_BYTES, extract_from_bytes
+from app.length import PREVIEW_MAX_CHARS, SECTION_MIN_CHARS
 from app.loader import ModelHub
 from app.markers import find_markers
 from app.pipeline import require_lang, run_detect, run_sentences
 from app.rhythm import measure_rhythm
+from app.static import mount_frontend
 
 hub = ModelHub()
 
@@ -40,6 +44,10 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+# 后加的中间件在外层：先数请求体字节，再谈 CORS 和路由。
+app.add_middleware(
+    BodyLimitMiddleware, limit=MAX_UPLOAD_BYTES, multipart_slack=_MULTIPART_SLACK
 )
 
 
@@ -86,13 +94,6 @@ async def run_until_disconnect(request: Request, fn, *args):
         )
     finally:
         watcher.cancel()
-
-
-def _reject_oversized(request: Request, slack: int = 0) -> None:
-    """靠 Content-Length 提前拦掉超大请求体，别等它整个进内存/临时文件。"""
-    declared = request.headers.get("content-length")
-    if declared and declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES + slack:
-        raise DetectError("payload_too_large")
 
 
 async def _read_upload(upload) -> bytes:
@@ -146,14 +147,17 @@ def _sentences(cancel, lang, text):
     )
 
 
-def _form_str(form, key: str) -> str | None:
-    value = form.get(key)
+def _str_field(source, key: str) -> str | None:
+    """表单或 JSON 里的字符串字段；缺失或类型不对一律当没给。"""
+    value = source.get(key)
     return value if isinstance(value, str) else None
 
 
 async def _json_object(request: Request) -> dict:
     try:
         data = await request.json()
+    except DetectError:
+        raise  # 体积超限等已分类的错误别被当成格式问题
     except Exception as exc:
         raise DetectError("bad_request") from exc
     if not isinstance(data, dict):
@@ -166,7 +170,6 @@ async def preview(request: Request):
     """Extract a local upload before scoring so the user can inspect what will be read."""
     if "multipart/form-data" not in request.headers.get("content-type", ""):
         raise DetectError("bad_request")
-    _reject_oversized(request, slack=_MULTIPART_SLACK)
     form = await request.form()
     upload = form.get("file")
     if upload is None or not hasattr(upload, "read"):
@@ -178,8 +181,8 @@ async def preview(request: Request):
         extract_from_bytes, getattr(upload, "filename", "") or "", raw
     )
     return {
-        "text": extracted.text[:5000],
-        "truncated": len(extracted.text) > 5000,
+        "text": extracted.text[:PREVIEW_MAX_CHARS],
+        "truncated": len(extracted.text) > PREVIEW_MAX_CHARS,
         "char_count": len(extracted.text),
         "paragraph_count": len(extracted.natural_paragraphs or ()),
     }
@@ -196,12 +199,11 @@ async def detect(request: Request):
     zh = None
     scope = None
     if "multipart/form-data" in ctype:
-        _reject_oversized(request, slack=_MULTIPART_SLACK)
         form = await request.form()
         lang = form.get("lang")
-        text = _form_str(form, "text")
-        en = _form_str(form, "en")
-        zh = _form_str(form, "zh")
+        text = _str_field(form, "text")
+        en = _str_field(form, "en")
+        zh = _str_field(form, "zh")
         upload = form.get("file")
         if upload is not None and hasattr(upload, "read"):
             file_bytes = await _read_upload(upload)
@@ -209,13 +211,12 @@ async def detect(request: Request):
             if file_bytes == b"":
                 file_bytes = None
     else:
-        _reject_oversized(request)
         data = await _json_object(request)
         lang = data.get("lang")
-        text = data.get("text") if isinstance(data.get("text"), str) else None
-        en = data.get("en") if isinstance(data.get("en"), str) else None
-        zh = data.get("zh") if isinstance(data.get("zh"), str) else None
-        scope = data.get("scope") if isinstance(data.get("scope"), str) else None
+        text = _str_field(data, "text")
+        en = _str_field(data, "en")
+        zh = _str_field(data, "zh")
+        scope = _str_field(data, "scope")
     # 先校验语言再问模型：否则 lang=fr 且模型未加载时会返回 503 而不是 400。
     lang = require_lang(lang)
     hub.assert_ready(lang)
@@ -224,7 +225,7 @@ async def detect(request: Request):
             request, _bilingual, text, en, zh, filename, file_bytes
         )
     # 单段重测不能套整篇的 200 字符下限，否则改一句就被拒。
-    floor = 20 if scope == "paragraph" else None
+    floor = SECTION_MIN_CHARS if scope == "paragraph" else None
     return await run_until_disconnect(
         request, _detect_document, lang, text, filename, file_bytes, floor
     )
@@ -233,23 +234,28 @@ async def detect(request: Request):
 @app.post("/api/sentences")
 async def sentences(request: Request):
     """高分段的单句前向。和整篇检测共用同一把闸，避免两路一起抢 CPU。"""
-    _reject_oversized(request)
     data = await _json_object(request)
     lang = require_lang(data.get("lang"))
     if lang == "bi":
         raise DetectError("lang_required")
     hub.assert_ready(lang)
-    text = data.get("text") if isinstance(data.get("text"), str) else None
+    text = _str_field(data, "text")
     return await run_until_disconnect(request, _sentences, lang, text)
 
 
 @app.post("/api/explain")
 async def explain_view(request: Request):
     """套话和句长不跑模型。单段重测之后用它刷新整篇的解释，不必重跑其它段。"""
-    _reject_oversized(request)
     data = await _json_object(request)
     lang = require_lang(data.get("lang"))
     if lang == "bi":
         raise DetectError("lang_required")
-    text = data.get("text") if isinstance(data.get("text"), str) else ""
+    text = _str_field(data, "text") or ""
     return {"markers": find_markers(text, lang), "rhythm": measure_rhythm(text)}
+
+
+# 单容器部署：DETECTOR_STATIC_DIR 指向前端构建产物，后端一并伺服。必须放在最后，
+# 让上面所有 /api 路由先注册。开发时不设，前端由 Vite 另起。
+_static_dir = os.environ.get("DETECTOR_STATIC_DIR")
+if _static_dir:
+    mount_frontend(app, Path(_static_dir))

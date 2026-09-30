@@ -1,11 +1,13 @@
 import json
+import os
 import urllib.request
 from pathlib import Path
 
 repo = 'ShantanuT01/vanguard-ai-text-detector'
 with urllib.request.urlopen(f'https://huggingface.co/api/models/{repo}', timeout=60) as r:
     revision = json.load(r)['sha']
-target = Path(__file__).resolve().parent / 'models' / 'vanguard'
+# 和后端 loader 用同一个环境变量；Docker 里权重放在挂载的卷上。
+target = Path(os.environ.get('VANGUARD_MODEL_PATH') or Path(__file__).resolve().parent / 'models' / 'vanguard')
 target.mkdir(parents=True, exist_ok=True)
 (target / 'revision.txt').write_text(revision, encoding='utf-8')
 for name in ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json', 'model.safetensors']:

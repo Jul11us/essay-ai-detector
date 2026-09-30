@@ -69,7 +69,7 @@ const SAMPLE: DetectOk = {
   basis: "依据",
   reading: "阅读",
   review_risk: "likely_ok",
-  review_label: "作业审查：按本站分数，文风上较不易被判高",
+  review_label: "作业审查：按本站分数，暂未见明显高分段",
   review: "不是过关证明",
   disclaimer: "免责",
   paragraphs: [

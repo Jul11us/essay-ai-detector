@@ -1135,3 +1135,53 @@ input:focus-visible,
   margin: 0.25rem 0;
   line-height: 1.45;
 }
+
+/* 只给读屏软件看的文字。 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.batch {
+  margin: 1.5rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--rule, #d9cfbd);
+  background: var(--paper, #fbf7ef);
+}
+.batch-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem 1rem;
+}
+.batch-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.batch table {
+  width: 100%;
+  margin: 0.8rem 0;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.batch th,
+.batch td {
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--rule, #d9cfbd);
+  overflow-wrap: anywhere;
+}
+.batch tr[aria-current="true"] {
+  background: rgba(63, 92, 74, 0.1);
+}
+.batch-files {
+  margin: 0.4rem 0;
+  padding-left: 1.2rem;
+}

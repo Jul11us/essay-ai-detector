@@ -21,6 +21,10 @@ npm --prefix frontend ci
 .\打开.bat
 ```
 
+macOS / Linux 可用 `scripts/dev.sh` 一键启动前后端（Ctrl-C 停止），虚拟环境放在 `.venv-detector/` 或用 `PYTHON` 环境变量指定解释器。
+
+要跑测试，把上面的 `requirements.txt` 换成 `backend\requirements-dev.txt`（多装 pytest 和 httpx）。
+
 英文模型默认放在 `experiments/models/vanguard`，也可用 `VANGUARD_MODEL_PATH` 指定。中文模型由后端首次加载时下载。只关闭浏览器并不会停止模型服务；请用 `停止.bat`。
 
 ## 测试
@@ -29,10 +33,33 @@ npm --prefix frontend ci
 Push-Location backend
 ..\.venv-detector\Scripts\python.exe -m pytest -q
 Pop-Location
+npm --prefix frontend run lint
 npm --prefix frontend test -- --run
 npm --prefix frontend run build
 ```
 
-默认的后端测试不加载模型。安装好中英文权重后，可在 `backend` 目录执行 `..\.venv-detector\Scripts\python.exe -m pytest -q -m golden` 检查固定**合成样本**的分数是否漂移。基线文件由 `backend/golden.py` 生成；它用于回归检查，不是准确率评测。
+默认的后端测试不加载模型，GitHub Actions（`.github/workflows/ci.yml`）在每次推送和 PR 时跑后端 pytest 与前端测试、构建。安装好中英文权重后，可在 `backend` 目录执行 `..\.venv-detector\Scripts\python.exe -m pytest -q -m golden` 检查固定**合成样本**的分数是否漂移。基线文件由 `backend/golden.py` 生成；它用于回归检查，不是准确率评测。
+
+端到端冒烟测试用真实的前端和 FastAPI 接口，只把模型换成确定性的假打分（`backend/e2e_server.py`），所以不需要权重：
+
+```powershell
+npm --prefix frontend run e2e
+```
+
+其中 `e2e/a11y.spec.ts` 用 axe 检查输入页、单篇结果、中英分开结果和批量汇总表（WCAG 2 A/AA 加 best-practice 规则）。自动检查抓不全，颜色对比被渐变背景挡住时 axe 会标成“未确定”，这类地方要手算；读屏顺序和键盘操作也需要人工试一遍。
+
+首次运行先执行 `npx playwright install chromium`。用 `E2E_PYTHON` 指定装好后端依赖的 Python，`PW_CHROMIUM_PATH` 指定已有的 Chromium。本地如果 8000 或 5173 端口已经有服务，测试会直接复用它们；在本机跑之前先 `停止.bat`，以免连到真实模型。
 
 CPU 可选 ONNX INT8 路径：先安装 `backend/requirements-onnx.txt`，再运行 `experiments/export_onnx.py`。没有导出文件时后端继续使用 PyTorch。
+
+## 上传限制
+
+- 请求体最多 20 MB（按实际收到的字节数算，分块上传也一样），multipart 另留 1 MB 余量。
+- `.docx` 是 zip，压缩后很小的文件可能解压得非常大。解压前会看 zip 目录：声明的解压总量超过 100 MB 或成员超过 5000 个就拒绝（`archive_too_large`）。
+- PDF 最多 300 页（`too_many_pages`），在逐页抽文字之前检查。
+- 这些数字在 `backend/app/extract.py`，错误文案里写了同样的数字（`backend/app/errors.py`），改的时候要一起改；测试会核对两者一致。
+- 正文长度另有限制：中文约 10000 字、英文约 8000 词。
+
+## 设计背景
+
+第一版的设计说明保留在 [design/initial-spec.md](design/initial-spec.md)，其中写了模型选择、英文推理预算和错误文案的由来。它是历史文档，部分内容（例如“不做 PDF”）已经过时，文件顶部有说明。
