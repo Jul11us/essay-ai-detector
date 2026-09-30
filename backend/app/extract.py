@@ -1,3 +1,4 @@
+import codecs
 import re
 from dataclasses import dataclass
 from io import BytesIO
@@ -38,8 +39,21 @@ def extract_from_bytes(filename: str, data: bytes) -> ExtractedText:
     return _extract_docx(data)
 
 
+# 带 BOM 的编码。Windows 记事本选「Unicode」另存就是 UTF-16 LE，
+# 很多 Windows 程序默认存「UTF-8 带 BOM」；BOM 是最可靠的判断依据。
+_BOMS = (
+    (codecs.BOM_UTF32_LE, "utf-32"),
+    (codecs.BOM_UTF32_BE, "utf-32"),
+    (codecs.BOM_UTF16_LE, "utf-16"),
+    (codecs.BOM_UTF16_BE, "utf-16"),
+    (codecs.BOM_UTF8, "utf-8-sig"),
+)
+
+
 def _decode_txt(data: bytes) -> str:
-    for enc in ("utf-8", "gb18030"):
+    candidates = [enc for bom, enc in _BOMS if data.startswith(bom)]
+    # 没有 BOM 时，GBK 系编码几乎什么字节都能解，所以一定要排在 UTF-8 之后。
+    for enc in (*candidates, "utf-8", "gb18030"):
         try:
             return data.decode(enc)
         except UnicodeDecodeError:

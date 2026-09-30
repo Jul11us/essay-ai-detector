@@ -19,6 +19,23 @@ def test_gbk_txt():
     assert "中文作业" in got.text
 
 
+@pytest.mark.parametrize(
+    "encoding",
+    ["utf-8-sig", "utf-16", "utf-16-be", "utf-32"],
+)
+@pytest.mark.parametrize(
+    "text",
+    ["这是第一段。我们去了图书馆。\n\n第二段在这里。", "First paragraph here.\n\nSecond one."],
+)
+def test_txt_with_bom_decodes_without_a_stray_mark(encoding, text):
+    raw = text.encode(encoding)
+    if encoding == "utf-16-be":
+        raw = b"\xfe\xff" + raw  # 该编码本身不写 BOM，手动补上
+    got = extract_from_bytes("notes.txt", raw)
+    assert got.text == text
+    assert "\ufeff" not in got.text
+
+
 def test_docx_joins_nonempty_paragraphs():
     doc = Document()
     doc.add_paragraph("第一段")

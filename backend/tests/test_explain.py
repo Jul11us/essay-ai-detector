@@ -58,13 +58,13 @@ def test_review_outlook_low_is_likely_ok():
         )
     )
     assert outlook.risk == "likely_ok"
-    assert "较不易被判高" in outlook.label
+    assert "暂未见明显高分段" in outlook.label
 
 
 def test_review_outlook_high_is_likely_flag():
     outlook = review_outlook(_result(score=0.8, verdict="high", confidence="medium"))
     assert outlook.risk == "likely_flag"
-    assert "较可能被盯" in outlook.label
+    assert "建议对照原文复核" in outlook.label
 
 
 def test_review_outlook_one_hot_paragraph_is_unclear():
@@ -81,4 +81,31 @@ def test_review_outlook_one_hot_paragraph_is_unclear():
         )
     )
     assert outlook.risk == "unclear"
-    assert "不好说" in outlook.label
+    assert "信号不一致" in outlook.label
+
+
+# 这些档位没有真值样本校准，文案不能替学生预测「会不会被查出 / 能不能过」。
+_PREDICTIONS = ("大概率", "较不易被判", "能过", "会被问", "被盯", "不会被")
+
+
+def test_review_outlook_never_predicts_what_a_checker_will_do():
+    cases = [
+        _result(score=0.1, verdict="low", confidence="medium"),
+        _result(score=0.5, verdict="uncertain", confidence="medium"),
+        _result(score=0.9, verdict="high", confidence="medium"),
+        _result(score=0.9, verdict="high", confidence="low"),
+    ]
+    for case in cases:
+        outlook = review_outlook(case)
+        for phrase in _PREDICTIONS:
+            assert phrase not in outlook.label, (phrase, outlook.label)
+            assert phrase not in outlook.detail, (phrase, outlook.detail)
+
+
+def test_basis_quotes_the_shared_thresholds():
+    from app.aggregate import HIGH_SCORE, LOW_SCORE
+    from app.explain import basis
+
+    text = basis("yuchuantian/AIGC_detector_zhv3", "zh")
+    assert f"{round(LOW_SCORE * 100)}%" in text
+    assert f"{round(HIGH_SCORE * 100)}%" in text
