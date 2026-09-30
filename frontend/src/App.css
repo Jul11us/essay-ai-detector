@@ -133,6 +133,10 @@ body {
   color: #d7cbb8;
 }
 
+.model-name {
+  overflow-wrap: anywhere;
+}
+
 .block {
   display: flex;
   flex-direction: column;

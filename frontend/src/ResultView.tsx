@@ -190,6 +190,7 @@ export function ResultCard({
           </div>
           <details className="method-note">
             <summary>判断方法与局限</summary>
+            <p className="model-name">检测模型：{data.model_id}</p>
             <p>{data.basis || data.explanation}</p>
             <p>{data.reading}</p>
             <p>文本充分度：{CONF_LABEL[data.confidence]}。这一档只由文本长度和各段分数一致程度计算，不能表示模型判断正确的概率。</p>

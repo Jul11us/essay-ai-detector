@@ -146,7 +146,7 @@ function statusCalls(fn: ReturnType<typeof stubFetch>) {
 
 async function readyAppWithText() {
   await screen.findByText(/中英文模型均已就绪/);
-  await userEvent.click(screen.getByRole("button", { name: /^英文\s*Vanguard$/ }));
+  await userEvent.click(screen.getByRole("button", { name: /^英文$/ }));
   await userEvent.type(screen.getByLabelText(/粘贴正文/), "hello world");
 }
 
@@ -170,7 +170,7 @@ describe("App 组件", () => {
     const fetchMock = stubFetch(async () => jsonResponse(READY));
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
-    await userEvent.click(screen.getByRole("button", { name: /^英文\s*Vanguard$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^英文$/ }));
 
     const go = screen.getByRole("button", { name: "开始检测" });
     expect(go).toBeDisabled();
@@ -212,7 +212,7 @@ describe("App 组件", () => {
     });
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
-    await userEvent.click(screen.getByRole("button", { name: /^英文\s*Vanguard$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^英文$/ }));
     await userEvent.upload(screen.getByLabelText(/上传 \.txt/), new File(["source"], "essay.txt", { type: "text/plain" }));
     expect(await screen.findByLabelText("文件提取文字预览")).toHaveValue("The extracted essay has two paragraphs.");
     expect(screen.getByRole("button", { name: "开始检测" })).toBeEnabled();
@@ -226,7 +226,7 @@ describe("App 组件", () => {
     );
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
-    await userEvent.click(screen.getByRole("button", { name: /^英文\s*Vanguard$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^英文$/ }));
     await userEvent.upload(screen.getByLabelText(/上传 \.txt/), new File(["bad"], "essay.pdf", { type: "application/pdf" }));
     expect(await screen.findByText("文件无法读取")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始检测" })).toBeDisabled();
@@ -265,7 +265,7 @@ describe("App 组件", () => {
 
     await screen.findByText(/已用/);
     expect(screen.getByLabelText(/粘贴正文/)).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^英文\s*Vanguard$/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^英文$/ })).toBeDisabled();
   });
 
   it("过短的段折叠起来，不和正文段并排", async () => {

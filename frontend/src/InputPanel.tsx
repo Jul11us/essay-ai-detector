@@ -99,7 +99,6 @@ export function InputPanel({
           onClick={() => setLang("en")}
         >
           英文
-          <small>Vanguard</small>
         </button>
         <button
           type="button"
@@ -108,7 +107,6 @@ export function InputPanel({
           onClick={() => setLang("zh")}
         >
           中文
-          <small>{status?.models.zh ? "zhv3" : "需另载模型"}</small>
         </button>
         <button
           type="button"

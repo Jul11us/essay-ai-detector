@@ -15,7 +15,7 @@ import type { DetectOk, Lang } from "./types";
 import { isBilingual, isSectionErr } from "./types";
 
 const DISCLAIMER =
-  "本结果仅表示开源模型的写作倾向，不能作为学术不端认定依据。英文检测使用本机 Vanguard，不是知网或 Turnitin。";
+  "本结果仅表示开源模型的写作倾向，不能作为学术不端认定依据。检测在本机完成，不是知网或 Turnitin 的检测结果。";
 
 export default function App() {
   const [lang, setLang] = useState<Lang | null>(null);
