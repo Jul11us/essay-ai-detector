@@ -83,14 +83,40 @@ def _extract_pdf(data: bytes) -> ExtractedText:
     return ExtractedText(text="\n\n".join(paras), natural_paragraphs=tuple(paras))
 
 
+def _docx_texts(parent_element, parent):
+    """按文档顺序吐出段落文字，表格里的单元格（含嵌套表格）也读。
+
+    `doc.paragraphs` 只有正文层的段落，放在表格里的文字会整个丢掉；
+    作业模板常把正文放进表格，丢了就会得到「没有读到正文」或漏掉一大块。
+    """
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    for child in parent_element.iterchildren():
+        if child.tag == qn("w:p"):
+            text = Paragraph(child, parent).text.strip()
+            if text:
+                yield text
+        elif child.tag == qn("w:tbl"):
+            seen = set()
+            for row in Table(child, parent).rows:
+                for cell in row.cells:
+                    # 合并单元格会在每个被合并的位置重复出现，只读一次。
+                    if cell._tc in seen:
+                        continue
+                    seen.add(cell._tc)
+                    yield from _docx_texts(cell._tc, cell)
+
+
 def _extract_docx(data: bytes) -> ExtractedText:
     try:
         from docx import Document
 
         doc = Document(BytesIO(data))
+        paras = tuple(_docx_texts(doc.element.body, doc))
     except Exception as exc:
         raise DetectError("parse_failed") from exc
-    paras = tuple(p.text.strip() for p in doc.paragraphs if p.text.strip())
     text = "\n\n".join(paras).strip()
     if not text:
         raise DetectError("empty")

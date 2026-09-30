@@ -36,6 +36,69 @@ def test_txt_with_bom_decodes_without_a_stray_mark(encoding, text):
     assert "\ufeff" not in got.text
 
 
+def _docx_bytes(doc) -> bytes:
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_docx_reads_table_text_in_document_order():
+    doc = Document()
+    doc.add_paragraph("Before the table.")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Row one, left"
+    table.cell(0, 1).text = "Row one, right"
+    table.cell(1, 0).text = "Row two, left"
+    table.cell(1, 1).text = ""
+    doc.add_paragraph("After the table.")
+    got = extract_from_bytes("paper.docx", _docx_bytes(doc))
+    assert got.natural_paragraphs == (
+        "Before the table.",
+        "Row one, left",
+        "Row one, right",
+        "Row two, left",
+        "After the table.",
+    )
+
+
+def test_docx_merged_cell_is_read_once():
+    doc = Document()
+    table = doc.add_table(rows=2, cols=2)
+    merged = table.cell(0, 0).merge(table.cell(0, 1))
+    merged.text = "Merged heading"
+    table.cell(1, 0).text = "Left"
+    table.cell(1, 1).text = "Right"
+    got = extract_from_bytes("paper.docx", _docx_bytes(doc))
+    assert got.natural_paragraphs == ("Merged heading", "Left", "Right")
+
+
+def test_docx_nested_table_is_read():
+    doc = Document()
+    outer = doc.add_table(rows=1, cols=1)
+    cell = outer.cell(0, 0)
+    cell.paragraphs[0].text = "Outer cell"
+    inner = cell.add_table(rows=1, cols=1)
+    inner.cell(0, 0).text = "Inner cell"
+    got = extract_from_bytes("paper.docx", _docx_bytes(doc))
+    assert got.natural_paragraphs == ("Outer cell", "Inner cell")
+
+
+def test_docx_that_is_only_a_table_is_not_empty():
+    doc = Document()
+    table = doc.add_table(rows=1, cols=1)
+    table.cell(0, 0).text = "All the essay lives in this cell."
+    got = extract_from_bytes("paper.docx", _docx_bytes(doc))
+    assert got.text == "All the essay lives in this cell."
+
+
+def test_docx_with_an_empty_table_and_no_text_is_empty():
+    doc = Document()
+    doc.add_table(rows=2, cols=2)
+    with pytest.raises(DetectError) as ei:
+        extract_from_bytes("paper.docx", _docx_bytes(doc))
+    assert ei.value.code == "empty"
+
+
 def test_docx_joins_nonempty_paragraphs():
     doc = Document()
     doc.add_paragraph("第一段")
