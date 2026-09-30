@@ -12,7 +12,7 @@
 
 ## What it does
 
-This work-in-progress site runs locally. Paste text or upload a `.txt`, `.docx`, or text-based PDF to preview extracted content and examine an English or Chinese model signal. Mixed-language documents can be scored by language. The results include paragraph and sentence highlights, a document overview, passages to review, and an HTML export. Inference runs on your machine; essay text is not sent to a third-party scoring API.
+This work-in-progress site runs locally. Paste text or upload a `.txt`, `.docx`, or text-based PDF to preview extracted content and examine an English or Chinese model signal. Mixed-language documents can be scored by language. The results include paragraph and sentence highlights, a document overview, passages to review, and exports to HTML, JSON, and CSV. Select several files at once to score them one by one into a summary table. Inference runs on your machine; essay text is not sent to a third-party scoring API.
 
 ## How to interpret a result
 

@@ -106,14 +106,14 @@ export default function App() {
   }
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="mast">
         <p className="kicker">本机 · 开源模型 · 按段说明</p>
         <h1>作文 AI 写作检测</h1>
         <p className="lede">
           粘贴作文或上传文件，查看模型倾向与逐句定位。正文只在这台电脑上分析。
         </p>
-        <div className="examples" aria-label="体验示例">
+        <div className="examples" role="group" aria-label="体验示例">
           <span>先试试看</span>
           {EXAMPLES.map((example) => (
             <button key={example.id} type="button" disabled={locked} onClick={() => loadExample(example)}>
@@ -198,6 +198,6 @@ export default function App() {
           render={(side, doc) => <ResultCard {...cardProps(side, doc)} />}
         />
       )}
-    </div>
+    </main>
   );
 }

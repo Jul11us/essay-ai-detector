@@ -46,6 +46,8 @@ npm --prefix frontend run build
 npm --prefix frontend run e2e
 ```
 
+其中 `e2e/a11y.spec.ts` 用 axe 检查输入页、单篇结果、中英分开结果和批量汇总表（WCAG 2 A/AA 加 best-practice 规则）。自动检查抓不全，颜色对比被渐变背景挡住时 axe 会标成“未确定”，这类地方要手算；读屏顺序和键盘操作也需要人工试一遍。
+
 首次运行先执行 `npx playwright install chromium`。用 `E2E_PYTHON` 指定装好后端依赖的 Python，`PW_CHROMIUM_PATH` 指定已有的 Chromium。本地如果 8000 或 5173 端口已经有服务，测试会直接复用它们；在本机跑之前先 `停止.bat`，以免连到真实模型。
 
 CPU 可选 ONNX INT8 路径：先安装 `backend/requirements-onnx.txt`，再运行 `experiments/export_onnx.py`。没有导出文件时后端继续使用 PyTorch。

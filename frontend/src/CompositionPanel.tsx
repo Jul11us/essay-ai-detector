@@ -15,12 +15,11 @@ export function CompositionPanel({ lang, comp }: { lang: string; comp: Compositi
     <div className={`compo ${comp.verdict}`}>
       <p className="compo-kicker">全文分布 · 按模型档位</p>
       <p className="compo-label">{comp.label}</p>
-      <div className="compo-strip" role="list" aria-label="全文分布，按原文顺序">
+      <div className="compo-strip" role="group" aria-label="全文分布，按原文顺序">
         {comp.units.map((u) => (
           <button
             key={`${u.paraIndex}:${u.sentIndex ?? "p"}`}
             type="button"
-            role="listitem"
             className={`seg ${u.band}`}
             style={{ flexGrow: u.weight }}
             title={`${unitPlace(u)} · ${formatPercent(u.score)}%${u.borrowed ? "（段分数）" : ""}`}

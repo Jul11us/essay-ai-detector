@@ -40,7 +40,7 @@ function ParagraphBody({
               id={sentenceDomId(lang, para.index, index)}
               className={`sent-button ${sentenceClass(sentence.highlight, top) || "sent"}`}
               title={`查看本句模型分数：${formatPercent(sentence.score)}%`}
-              aria-label={`第 ${para.index + 1} 段第 ${index + 1} 句，模型分数 ${formatPercent(sentence.score)}%，点击查看说明`}
+              aria-label={`${sentence.text}（第 ${para.index + 1} 段第 ${index + 1} 句，模型分数 ${formatPercent(sentence.score)}%，点击查看说明）`}
               onClick={() => setSelected(index)}
             >
               {sentence.text}

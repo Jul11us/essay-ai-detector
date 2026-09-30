@@ -89,7 +89,7 @@ export function ResultCard({
             : "请先看标记的原句和上下文。单个分数不能证明文字来源。"}</p>
           {data.mixed_variance && <p className="mix">各段差异较大，建议逐段查看。</p>}
         </div>
-        <div className="result-score" aria-label={`模型原始分数 ${percent}%`}>
+        <div className="result-score">
           <span>模型原始分数</span>
           <strong>{percent}%</strong>
           <small>未经过本站作文样本校准，不是 AI 所写字数比例</small>
@@ -179,7 +179,7 @@ export function ResultCard({
             </details>
           )}
         </div>
-        <aside className="analysis-sidebar" aria-label="检测分析">
+        <aside className="analysis-sidebar" aria-label={`检测分析 · ${data.lang === "zh" ? "中文" : "英文"}`}>
           <CompositionPanel lang={data.lang} comp={comp} />
           <SuspectList lang={data.lang} suspects={suspects} />
           <div className="analysis-section">
