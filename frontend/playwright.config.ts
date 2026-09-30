@@ -26,6 +26,8 @@ export default defineConfig({
     {
       command: "npm run dev",
       url: "http://127.0.0.1:5173",
+      // 默认不转发 stdout；Vite 起不来时要能在 CI 日志里看到原因。
+      stdout: "pipe",
       reuseExistingServer: !process.env.CI,
     },
   ],
