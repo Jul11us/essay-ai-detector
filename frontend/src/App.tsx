@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BatchPanel } from "./BatchPanel";
 import { BilingualResult } from "./BilingualResult";
 import { InputPanel } from "./InputPanel";
@@ -31,6 +31,13 @@ export default function App() {
   const batch = useBatch();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const { busy, result, baseline, error } = detector;
+  const { updateResult: updateBatchResult } = batch;
+
+  useEffect(() => {
+    if (openIndex !== null && result && !isBilingual(result)) {
+      updateBatchResult(openIndex, result);
+    }
+  }, [openIndex, result, updateBatchResult]);
   const inBatch = batch.files.length > 0;
   const locked = busy || batch.running;
 
@@ -191,7 +198,9 @@ export default function App() {
         </>
       )}
 
-      {result && !isBilingual(result) && <ResultCard {...cardProps("single", result)} />}
+      {result && !isBilingual(result) && (
+        <ResultCard key={openIndex ?? "single"} {...cardProps("single", result)} />
+      )}
       {result && isBilingual(result) && (
         <BilingualResult
           data={result}

@@ -142,6 +142,38 @@ test("several files are scored one by one and each can be opened", async ({ page
   expect(csv).toContain("broken.pdf,error");
 });
 
+test("batch retains paragraph rechecks when switching files and exporting the summary", async ({ page }) => {
+  await ready(page);
+  await pickLanguage(page, "英文");
+  const flaggedText = `${EN_FLAGGED} ${EN_PLAIN}`;
+  const editedText = flaggedText.replace("Furthermore, the", "The");
+  await page.locator('input[type="file"]').setInputFiles([
+    { name: "flagged.txt", mimeType: "text/plain", buffer: Buffer.from(flaggedText) },
+    { name: "plain.txt", mimeType: "text/plain", buffer: Buffer.from(`${EN_PLAIN} ${EN_PLAIN}`) },
+  ]);
+  await page.getByRole("button", { name: "批量检测 2 个文件" }).click();
+  await expect(page.getByText("共 2 个文件，已处理 2 个")).toBeVisible();
+
+  await page.getByRole("button", { name: "查看 flagged.txt 的逐句结果" }).click();
+  const paragraph = page.locator("li.para").first();
+  await expect(paragraph).toHaveClass(/high/);
+  await paragraph.getByRole("button", { name: "在此修改并重测本段" }).click();
+  await paragraph.getByLabel("修改第 1 段").fill(editedText);
+  await paragraph.getByRole("button", { name: "重测这一段" }).click();
+  await expect(paragraph).toHaveClass(/low/);
+
+  await page.getByRole("button", { name: "查看 plain.txt 的逐句结果" }).click();
+  await page.getByRole("button", { name: "查看 flagged.txt 的逐句结果" }).click();
+  await expect(paragraph).toHaveClass(/low/);
+  await expect(paragraph.locator("p.body")).toHaveText(editedText);
+  await expect(page.getByRole("table").getByRole("row", { name: /flagged\.txt/ })).toContainText("8.0%");
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出汇总 CSV" }).click();
+  const csv = await streamToString(await (await download).createReadStream());
+  expect(csv).toContain("flagged.txt,done,en,0.08,low");
+});
+
 test("batch is not offered for the bilingual mode", async ({ page }) => {
   await ready(page);
   await pickLanguage(page, "中英分开");
