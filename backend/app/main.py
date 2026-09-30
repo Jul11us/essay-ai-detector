@@ -2,6 +2,7 @@ import asyncio
 import os
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ from app.loader import ModelHub
 from app.markers import find_markers
 from app.pipeline import require_lang, run_detect, run_sentences
 from app.rhythm import measure_rhythm
+from app.static import mount_frontend
 
 hub = ModelHub()
 
@@ -250,3 +252,10 @@ async def explain_view(request: Request):
         raise DetectError("lang_required")
     text = _str_field(data, "text") or ""
     return {"markers": find_markers(text, lang), "rhythm": measure_rhythm(text)}
+
+
+# 单容器部署：DETECTOR_STATIC_DIR 指向前端构建产物，后端一并伺服。必须放在最后，
+# 让上面所有 /api 路由先注册。开发时不设，前端由 Vite 另起。
+_static_dir = os.environ.get("DETECTOR_STATIC_DIR")
+if _static_dir:
+    mount_frontend(app, Path(_static_dir))

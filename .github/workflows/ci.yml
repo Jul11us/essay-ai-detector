@@ -72,3 +72,32 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: essay-ai-detector:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # 不加载模型（DETECTOR_SKIP_LOAD），只验证：镜像能起、前端和接口都由后端伺服、非 root。
+      - name: Smoke test
+        run: |
+          docker run -d --name detector -p 127.0.0.1:8000:8000 -e DETECTOR_SKIP_LOAD=1 essay-ai-detector:ci
+          for i in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' detector)" = healthy ] && break
+            sleep 2
+          done
+          docker inspect -f 'health={{.State.Health.Status}}' detector
+          curl -fsS http://127.0.0.1:8000/api/health
+          curl -fsS http://127.0.0.1:8000/ | grep -q 'id="root"'
+          curl -fsS http://127.0.0.1:8000/api/status
+          test "$(docker exec detector id -u)" = 1000
+          test "$(docker inspect -f '{{.State.Health.Status}}' detector)" = healthy
+      - if: failure()
+        run: docker logs detector

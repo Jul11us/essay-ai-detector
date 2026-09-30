@@ -1,0 +1,21 @@
+# 本机使用：只映射到 127.0.0.1，别改成 0.0.0.0——这个服务没有登录，也没有次数限制。
+services:
+  detector:
+    build: .
+    image: essay-ai-detector
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - models:/models
+
+  # 一次性下载英文模型到 /models 卷：docker compose --profile tools run --rm download-models
+  download-models:
+    profiles: [tools]
+    build: .
+    image: essay-ai-detector
+    command: ["python", "/app/experiments/download_model.py"]
+    volumes:
+      - models:/models
+
+volumes:
+  models:
