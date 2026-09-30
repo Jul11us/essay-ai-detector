@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.bilingual import run_bilingual
+from app.bodylimit import BodyLimitMiddleware
 from app.errors import DetectError
 from app.extract import MAX_UPLOAD_BYTES, extract_from_bytes
 from app.length import PREVIEW_MAX_CHARS, SECTION_MIN_CHARS
@@ -41,6 +42,10 @@ app.add_middleware(
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+# 后加的中间件在外层：先数请求体字节，再谈 CORS 和路由。
+app.add_middleware(
+    BodyLimitMiddleware, limit=MAX_UPLOAD_BYTES, multipart_slack=_MULTIPART_SLACK
 )
 
 
@@ -87,13 +92,6 @@ async def run_until_disconnect(request: Request, fn, *args):
         )
     finally:
         watcher.cancel()
-
-
-def _reject_oversized(request: Request, slack: int = 0) -> None:
-    """靠 Content-Length 提前拦掉超大请求体，别等它整个进内存/临时文件。"""
-    declared = request.headers.get("content-length")
-    if declared and declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES + slack:
-        raise DetectError("payload_too_large")
 
 
 async def _read_upload(upload) -> bytes:
@@ -156,6 +154,8 @@ def _str_field(source, key: str) -> str | None:
 async def _json_object(request: Request) -> dict:
     try:
         data = await request.json()
+    except DetectError:
+        raise  # 体积超限等已分类的错误别被当成格式问题
     except Exception as exc:
         raise DetectError("bad_request") from exc
     if not isinstance(data, dict):
@@ -168,7 +168,6 @@ async def preview(request: Request):
     """Extract a local upload before scoring so the user can inspect what will be read."""
     if "multipart/form-data" not in request.headers.get("content-type", ""):
         raise DetectError("bad_request")
-    _reject_oversized(request, slack=_MULTIPART_SLACK)
     form = await request.form()
     upload = form.get("file")
     if upload is None or not hasattr(upload, "read"):
@@ -198,7 +197,6 @@ async def detect(request: Request):
     zh = None
     scope = None
     if "multipart/form-data" in ctype:
-        _reject_oversized(request, slack=_MULTIPART_SLACK)
         form = await request.form()
         lang = form.get("lang")
         text = _str_field(form, "text")
@@ -211,7 +209,6 @@ async def detect(request: Request):
             if file_bytes == b"":
                 file_bytes = None
     else:
-        _reject_oversized(request)
         data = await _json_object(request)
         lang = data.get("lang")
         text = _str_field(data, "text")
@@ -235,7 +232,6 @@ async def detect(request: Request):
 @app.post("/api/sentences")
 async def sentences(request: Request):
     """高分段的单句前向。和整篇检测共用同一把闸，避免两路一起抢 CPU。"""
-    _reject_oversized(request)
     data = await _json_object(request)
     lang = require_lang(data.get("lang"))
     if lang == "bi":
@@ -248,7 +244,6 @@ async def sentences(request: Request):
 @app.post("/api/explain")
 async def explain_view(request: Request):
     """套话和句长不跑模型。单段重测之后用它刷新整篇的解释，不必重跑其它段。"""
-    _reject_oversized(request)
     data = await _json_object(request)
     lang = require_lang(data.get("lang"))
     if lang == "bi":
