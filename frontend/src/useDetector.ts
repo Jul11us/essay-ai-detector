@@ -157,6 +157,18 @@ export function useDetector() {
     setError(null);
   }
 
+  /** 把已经算好的一份结果（批量检测里的某个文件）接进来，之后和单篇检测一样可以逐句定位、重测、导出。 */
+  function adopt(data: DetectOk) {
+    const mine = ++gen.current;
+    scanAbort.current?.abort();
+    setBaseline(null);
+    setError(null);
+    setCopied(null);
+    setResult(data);
+    scanEpoch.current = mine;
+    setScanToken(mine);
+  }
+
   /** 改了正文：只清掉结果，初稿留着做对比。 */
   function forgetResult() {
     setResult(null);
@@ -316,6 +328,7 @@ export function useDetector() {
     rechecking,
     setError,
     reset,
+    adopt,
     forgetResult,
     submit,
     cancel,

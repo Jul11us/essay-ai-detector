@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BatchPanel } from "./BatchPanel";
 import { BilingualResult } from "./BilingualResult";
 import { InputPanel } from "./InputPanel";
 import { Compare, ResultCard } from "./ResultView";
@@ -6,6 +7,7 @@ import type { Side } from "./aggregate";
 import { canSubmit } from "./copy";
 import { EXAMPLES } from "./examples";
 import { suggestLanguage } from "./languageHint";
+import { useBatch } from "./useBatch";
 import { useDetector } from "./useDetector";
 import { useFileInput } from "./useFileInput";
 import { useModelStatus } from "./useModelStatus";
@@ -26,7 +28,11 @@ export default function App() {
   const { file, filePreview, previewBusy, previewError, fileInputRef, onFile } = useFileInput(
     detector.reset,
   );
+  const batch = useBatch();
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
   const { busy, result, baseline, error } = detector;
+  const inBatch = batch.files.length > 0;
+  const locked = busy || batch.running;
 
   const langReady =
     lang === "bi"
@@ -35,8 +41,10 @@ export default function App() {
         ? Boolean(status?.models[lang])
         : false;
   const readyToSubmit =
-    canSubmit(lang, text, file, { en: enText, zh: zhText }) && langReady && !busy &&
-    (!file || (filePreview !== null && !previewBusy && !previewError));
+    (inBatch
+      ? lang !== null && lang !== "bi" && langReady && !locked
+      : canSubmit(lang, text, file, { en: enText, zh: zhText }) && langReady && !locked &&
+        (!file || (filePreview !== null && !previewBusy && !previewError)));
   const statusLine = status?.detail ?? "正在连接检测服务…";
   const runtimeNote = [
     status?.runtime?.en === "onnx-int8" ? "英文 INT8" : "",
@@ -47,7 +55,34 @@ export default function App() {
 
   const suggestion = suggestLanguage(file ? filePreview?.text ?? "" : [text, enText, zhText].join("\n"));
 
+  // 选一个文件走单篇流程（先预览）；选多个走批量流程（逐个检测，汇总成表）。
+  const onFiles = (list: File[]) => {
+    setOpenIndex(null);
+    if (list.length > 1) {
+      onFile(null);
+      batch.setFiles(list);
+      return;
+    }
+    batch.setFiles([]);
+    onFile(list[0] ?? null);
+  };
+
+  const onSubmit = () => {
+    if (inBatch) {
+      if (lang !== "zh" && lang !== "en") return;
+      detector.reset();
+      setOpenIndex(null);
+      void batch.start(lang);
+      return;
+    }
+    setOpenIndex(null);
+    batch.setFiles([]);
+    void detector.submit({ lang, text, file, en: enText, zh: zhText });
+  };
+
   const loadExample = (example: (typeof EXAMPLES)[number]) => {
+    batch.setFiles([]);
+    setOpenIndex(null);
     onFile(null);
     setLang(example.lang);
     setText(example.text);
@@ -81,7 +116,7 @@ export default function App() {
         <div className="examples" aria-label="体验示例">
           <span>先试试看</span>
           {EXAMPLES.map((example) => (
-            <button key={example.id} type="button" disabled={busy} onClick={() => loadExample(example)}>
+            <button key={example.id} type="button" disabled={locked} onClick={() => loadExample(example)}>
               {example.label}
             </button>
           ))}
@@ -114,11 +149,26 @@ export default function App() {
         onFile={onFile}
         forgetResult={detector.forgetResult}
         busy={busy}
+        locked={locked}
+        batchFiles={batch.files}
+        onFiles={onFiles}
+        batchRunning={batch.running}
         elapsed={detector.elapsed}
         langReady={langReady}
         readyToSubmit={readyToSubmit}
-        onSubmit={() => detector.submit({ lang, text, file, en: enText, zh: zhText })}
+        onSubmit={onSubmit}
         onCancel={detector.cancel}
+      />
+
+      <BatchPanel
+        rows={batch.rows}
+        running={batch.running}
+        openIndex={openIndex}
+        onOpen={(index, data) => {
+          setOpenIndex(index);
+          detector.adopt(data);
+        }}
+        onCancel={batch.cancel}
       />
 
       {error && (

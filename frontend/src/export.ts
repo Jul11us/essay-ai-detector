@@ -1,4 +1,5 @@
 import type { Outcome } from "./aggregate";
+import type { BatchRow } from "./batch";
 import { downloadText } from "./download";
 import type { BilingualOk, DetectOk } from "./types";
 import { isBilingual, isSectionErr } from "./types";
@@ -84,4 +85,23 @@ export function downloadJson(json: string, filename: string): void {
 
 export function exportCsvFor(data: Outcome): string {
   return isBilingual(data) ? buildBilingualCsv(data) : buildResultCsv(data);
+}
+
+const BATCH_HEADER = ["file", "status", "language", "score", "verdict", "confidence", "characters", "message"];
+
+/** 批量汇总：每个文件一行。没出分数的文件保留状态和原因。 */
+export function buildBatchCsv(rows: BatchRow[]): string {
+  return toCsv([
+    BATCH_HEADER,
+    ...rows.map((r) => [
+      r.name,
+      r.status,
+      r.result?.lang ?? "",
+      r.result ? prob(r.result.score) : "",
+      r.result?.verdict ?? "",
+      r.result?.confidence ?? "",
+      r.result?.char_count ?? "",
+      r.message ?? "",
+    ]),
+  ]);
 }

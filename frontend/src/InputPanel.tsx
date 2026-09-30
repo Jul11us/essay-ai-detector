@@ -27,6 +27,11 @@ export type InputPanelProps = {
   onFile: (file: File | null) => void;
   forgetResult: () => void;
   busy: boolean;
+  /** 单篇检测或批量检测任意一个在跑：输入区整体禁用。 */
+  locked: boolean;
+  batchFiles: File[];
+  onFiles: (files: File[]) => void;
+  batchRunning: boolean;
   elapsed: number;
   langReady: boolean;
   readyToSubmit: boolean;
@@ -57,6 +62,10 @@ export function InputPanel({
   onFile,
   forgetResult,
   busy,
+  locked,
+  batchFiles,
+  onFiles,
+  batchRunning,
   elapsed,
   langReady,
   readyToSubmit,
@@ -64,6 +73,9 @@ export function InputPanel({
   onCancel,
 }: InputPanelProps) {
   const showSuggestion = suggestion && suggestion !== lang;
+  const inBatch = batchFiles.length > 0;
+  const hasFile = Boolean(file) || inBatch;
+  const anyFile = file ?? batchFiles[0] ?? null;
   return (
     <section className="panel">
       <div className="status-row" role="status">
@@ -83,7 +95,7 @@ export function InputPanel({
         <button
           type="button"
           className={lang === "en" ? "chip on" : "chip"}
-          disabled={busy}
+          disabled={locked}
           onClick={() => setLang("en")}
         >
           英文
@@ -92,7 +104,7 @@ export function InputPanel({
         <button
           type="button"
           className={lang === "zh" ? "chip on" : "chip"}
-          disabled={busy}
+          disabled={locked}
           onClick={() => setLang("zh")}
         >
           中文
@@ -101,7 +113,7 @@ export function InputPanel({
         <button
           type="button"
           className={lang === "bi" ? "chip on" : "chip"}
-          disabled={busy}
+          disabled={locked}
           onClick={() => {
             setLang("bi");
             // 刚才贴在单栏里的正文会进「自动拆开」。有内容就展开，避免检测时用了一段看不见的旧文本。
@@ -115,7 +127,7 @@ export function InputPanel({
       {showSuggestion && (
         <p className="language-hint">
           输入看起来像{LANGUAGE_LABEL[suggestion]}。
-          <button type="button" className="text-btn" disabled={busy} onClick={() => {
+          <button type="button" className="text-btn" disabled={locked} onClick={() => {
             setLang(suggestion);
             if (suggestion === "bi") setMixOpen(true);
           }}>切换为{LANGUAGE_LABEL[suggestion]}</button>
@@ -134,7 +146,7 @@ export function InputPanel({
             }}
             placeholder="课程作业或学期论文。有文件时以文件为准，忽略此框。"
             rows={12}
-            disabled={Boolean(file) || busy}
+            disabled={hasFile || locked}
           />
         </label>
       )}
@@ -152,7 +164,7 @@ export function InputPanel({
                 }}
                 placeholder="Abstract、英文标题、英文参考文献。"
                 rows={8}
-                disabled={Boolean(file) || busy}
+                disabled={hasFile || locked}
               />
             </label>
             <label className="block">
@@ -165,7 +177,7 @@ export function InputPanel({
                 }}
                 placeholder="中文正文。不要和英文摘要混在同一栏。"
                 rows={8}
-                disabled={Boolean(file) || busy}
+                disabled={hasFile || locked}
               />
             </label>
           </div>
@@ -185,7 +197,7 @@ export function InputPanel({
                 }}
                 placeholder="中文段和英文段可以粘在一起，按段落的文字自动拆开。"
                 rows={8}
-                disabled={Boolean(file) || busy}
+                disabled={hasFile || locked}
               />
             </label>
           </details>
@@ -194,22 +206,40 @@ export function InputPanel({
 
       <div className="upload">
         <label className="file">
-          上传 .txt / .docx / .pdf
+          上传 .txt / .docx / .pdf（可多选批量检测）
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             accept=".txt,.docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-            disabled={busy}
+            disabled={locked}
             onClick={(e) => { e.currentTarget.value = ""; }}
-            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => onFiles(Array.from(e.target.files ?? []))}
           />
         </label>
         {file && (
-          <button type="button" className="text-btn" disabled={busy} onClick={() => onFile(null)}>
+          <button type="button" className="text-btn" disabled={locked} onClick={() => onFile(null)}>
             清除 {file.name}
           </button>
         )}
       </div>
+      {inBatch && (
+        <div className="file-preview" role="status">
+          <strong>批量检测 · {batchFiles.length} 个文件</strong>
+          <ul className="batch-files">
+            {batchFiles.map((f, i) => (
+              <li key={`${f.name}:${i}`}>{f.name}</li>
+            ))}
+          </ul>
+          <button type="button" className="text-btn" disabled={locked} onClick={() => onFiles([])}>
+            清除这 {batchFiles.length} 个文件
+          </button>
+          <p>
+            每个文件单独检测，用同一种语言。逐个排队运行，结束后在下方汇总表里点开任意一篇看逐句结果。
+            {lang === "bi" && "批量检测不支持“中英分开”，请改选中文或英文。"}
+          </p>
+        </div>
+      )}
       {file && (
         <div className="file-preview" role="status">
           <strong>文件文字预览 · {file.name}</strong>
@@ -226,7 +256,7 @@ export function InputPanel({
       <p className="hint">扫描版 PDF 读不出文字，会直接提示你换文字版。</p>
 
       <button type="button" className="go" disabled={!readyToSubmit} onClick={onSubmit}>
-        {busy ? "正在检测…" : "开始检测"}
+        {batchRunning ? "正在批量检测…" : busy ? "正在检测…" : inBatch ? `批量检测 ${batchFiles.length} 个文件` : "开始检测"}
       </button>
       {busy && (
         <div className="running" role="status">
@@ -237,8 +267,8 @@ export function InputPanel({
         </div>
       )}
       {!lang && <p className="hint">请先选择中文、英文，或中英分开。</p>}
-      {lang && lang !== "bi" && !canSubmit(lang, text, file) && <p className="hint">请粘贴或上传。</p>}
-      {lang === "bi" && !canSubmit(lang, text, file, { en: enText, zh: zhText }) && (
+      {lang && lang !== "bi" && !canSubmit(lang, text, anyFile) && <p className="hint">请粘贴或上传。</p>}
+      {lang === "bi" && !canSubmit(lang, text, anyFile, { en: enText, zh: zhText }) && (
         <p className="hint">请填写英文或中文，或上传整篇。</p>
       )}
       {lang === "bi" && !langReady && status?.phase !== "error" && (
