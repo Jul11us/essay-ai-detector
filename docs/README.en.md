@@ -20,7 +20,7 @@ The output is a **writing-pattern signal**, not the percentage of words written 
 
 ## Get started
 
-Use Windows, Python 3.11+, and Node.js 20+. Run from the repository root in PowerShell:
+Use Windows, Python 3.11+, and Node.js 20.19+. Run from the repository root in PowerShell:
 
 ```powershell
 py -3 -m venv .venv-detector

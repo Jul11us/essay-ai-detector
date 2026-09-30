@@ -33,6 +33,7 @@ macOS / Linux 可用 `scripts/dev.sh` 一键启动前后端（Ctrl-C 停止）�
 Push-Location backend
 ..\.venv-detector\Scripts\python.exe -m pytest -q
 Pop-Location
+npm --prefix frontend run lint
 npm --prefix frontend test -- --run
 npm --prefix frontend run build
 ```
