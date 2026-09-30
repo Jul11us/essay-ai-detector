@@ -52,6 +52,14 @@ npm --prefix frontend run e2e
 
 CPU 可选 ONNX INT8 路径：先安装 `backend/requirements-onnx.txt`，再运行 `experiments/export_onnx.py`。没有导出文件时后端继续使用 PyTorch。
 
+## 上传限制
+
+- 请求体最多 20 MB（按实际收到的字节数算，分块上传也一样），multipart 另留 1 MB 余量。
+- `.docx` 是 zip，压缩后很小的文件可能解压得非常大。解压前会看 zip 目录：声明的解压总量超过 100 MB 或成员超过 5000 个就拒绝（`archive_too_large`）。
+- PDF 最多 300 页（`too_many_pages`），在逐页抽文字之前检查。
+- 这些数字在 `backend/app/extract.py`，错误文案里写了同样的数字（`backend/app/errors.py`），改的时候要一起改；测试会核对两者一致。
+- 正文长度另有限制：中文约 10000 字、英文约 8000 词。
+
 ## 设计背景
 
 第一版的设计说明保留在 [design/initial-spec.md](design/initial-spec.md)，其中写了模型选择、英文推理预算和错误文案的由来。它是历史文档，部分内容（例如“不做 PDF”）已经过时，文件顶部有说明。

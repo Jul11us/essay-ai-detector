@@ -225,3 +225,94 @@ def test_pdf_heading_is_its_own_paragraph():
 def test_pdf_word_like_civil_at_top_is_kept():
     paras = pdf_paragraphs([f"Civil\n{_FULL}\nEnd."])
     assert paras[0] == "Civil"
+
+
+# ---- 解压后体积 / 页数上限 ----
+
+
+def _docx_with_padding(entries: int = 0, padding_bytes: int = 0) -> bytes:
+    """正常的 docx，再塞进一些压缩得很小、解压后很大的成员（压缩炸弹的形状）。"""
+    import zipfile
+
+    doc = Document()
+    doc.add_paragraph("A normal essay paragraph that should be readable.")
+    src = _docx_bytes(doc)
+    out = BytesIO()
+    with zipfile.ZipFile(BytesIO(src)) as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+        for info in zin.infolist():
+            zout.writestr(info, zin.read(info.filename))
+        if padding_bytes:
+            zout.writestr("word/media/padding.bin", b"\0" * padding_bytes)
+        for i in range(entries):
+            zout.writestr(f"extra/{i}.txt", b"x")
+    return out.getvalue()
+
+
+def test_docx_that_inflates_past_the_limit_is_rejected_before_parsing(monkeypatch):
+    from app import extract
+
+    monkeypatch.setattr(extract, "MAX_DOCX_UNCOMPRESSED_BYTES", 100_000)
+    raw = _docx_with_padding(padding_bytes=2_000_000)
+    assert len(raw) < 100_000  # 压缩后很小，Content-Length 那道闸拦不住它
+    with pytest.raises(DetectError) as ei:
+        extract_from_bytes("bomb.docx", raw)
+    assert ei.value.code == "archive_too_large"
+
+
+def test_docx_with_too_many_entries_is_rejected(monkeypatch):
+    from app import extract
+
+    monkeypatch.setattr(extract, "MAX_DOCX_ENTRIES", 20)
+    with pytest.raises(DetectError) as ei:
+        extract_from_bytes("many.docx", _docx_with_padding(entries=50))
+    assert ei.value.code == "archive_too_large"
+
+
+def test_ordinary_docx_is_under_the_default_limits():
+    got = extract_from_bytes("ok.docx", _docx_with_padding())
+    assert got.text.startswith("A normal essay paragraph")
+
+
+def _blank_pdf(pages: int) -> bytes:
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(width=72, height=72)
+    out = BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def test_pdf_with_too_many_pages_is_rejected_without_extracting_text(monkeypatch):
+    from pypdf import PageObject
+
+    from app import extract
+
+    monkeypatch.setattr(extract, "MAX_PDF_PAGES", 2)
+
+    def boom(self, *args, **kwargs):
+        raise AssertionError("text extraction must not start on an oversized PDF")
+
+    monkeypatch.setattr(PageObject, "extract_text", boom)
+    with pytest.raises(DetectError) as ei:
+        extract_from_bytes("long.pdf", _blank_pdf(3))
+    assert ei.value.code == "too_many_pages"
+
+
+def test_pdf_at_the_page_limit_still_goes_through_extraction(monkeypatch):
+    from app import extract
+
+    monkeypatch.setattr(extract, "MAX_PDF_PAGES", 3)
+    with pytest.raises(DetectError) as ei:
+        extract_from_bytes("ok.pdf", _blank_pdf(3))
+    assert ei.value.code == "scanned_pdf"  # 空白页：过了页数关，被当成扫描件
+
+
+def test_limit_messages_quote_the_real_limits():
+    from app import extract
+
+    assert f"{extract.MAX_PDF_PAGES} 页" in DetectError("too_many_pages").message
+    assert f"{extract.MAX_DOCX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB" in DetectError(
+        "archive_too_large"
+    ).message

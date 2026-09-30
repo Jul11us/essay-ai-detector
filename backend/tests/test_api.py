@@ -46,6 +46,39 @@ def test_preview_rejects_bad_upload():
     assert r.json()["error"] == "parse_failed"
 
 
+def test_inflating_docx_gets_a_clear_error_on_both_upload_paths(monkeypatch):
+    """压缩后只有几 KB、解压后巨大的 docx：预览和检测都要在解析前拒绝，且错误文案可读。"""
+    import zipfile
+    from io import BytesIO
+
+    from docx import Document
+
+    from app import extract
+
+    monkeypatch.setattr(extract, "MAX_DOCX_UNCOMPRESSED_BYTES", 100_000)
+    doc = Document()
+    doc.add_paragraph("Short body.")
+    src = BytesIO()
+    doc.save(src)
+    out = BytesIO()
+    with zipfile.ZipFile(BytesIO(src.getvalue())) as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+        for info in zin.infolist():
+            zout.writestr(info, zin.read(info.filename))
+        zout.writestr("word/media/padding.bin", b"\0" * 2_000_000)
+    bomb = out.getvalue()
+    assert len(bomb) < 100_000
+
+    hub.loaded = {"zh": True, "en": True}
+    hub.phase = "ready"
+    c = TestClient(app)
+    docx_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    for path, data in (("/api/preview", {}), ("/api/detect", {"lang": "en"})):
+        r = c.post(path, data=data, files={"file": ("bomb.docx", bomb, docx_type)})
+        assert r.status_code == 400, path
+        assert r.json()["error"] == "archive_too_large", path
+        assert "解压后太大" in r.json()["message"], path
+
+
 def test_detect_json():
     c = TestClient(app)
     r = c.post("/api/detect", json={"lang": "en", "text": "word " * 80})

@@ -1,5 +1,6 @@
 import codecs
 import re
+import zipfile
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -10,6 +11,16 @@ _ALLOWED = {".txt", ".docx", ".pdf"}
 # 上传上限。作业正文撑死几百 KB，20 MB 留足余量；
 # 没有这个上限时 `await upload.read()` 会把任意大的文件整个读进内存。
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+# 上传体积只约束压缩后的字节数。.docx 本质是 zip，几十 KB 可以解压成几个 GB；
+# python-docx 会把所有成员读进内存。所以解压前先按 zip 目录里声明的大小挡一道
+# （zipfile 读取时不会超出声明大小，这个数是有效的上限）。
+# 错误文案里写了同样的数字（errors.py），改这里要一起改。
+MAX_DOCX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+MAX_DOCX_ENTRIES = 5000
+# 正文最多约 1 万中文字 / 8000 词，也就是二三十页；300 页留足余量，
+# 只为别让一份几千页的 PDF 占着 CPU 逐页抽文字。
+MAX_PDF_PAGES = 300
 
 
 @dataclass(frozen=True)
@@ -72,6 +83,8 @@ def _extract_pdf(data: bytes) -> ExtractedText:
                 reader.decrypt("")
             except Exception as exc:
                 raise DetectError("parse_failed") from exc
+        if len(reader.pages) > MAX_PDF_PAGES:
+            raise DetectError("too_many_pages")
         pages = [(page.extract_text() or "") for page in reader.pages]
     except DetectError:
         raise
@@ -109,7 +122,19 @@ def _docx_texts(parent_element, parent):
                     yield from _docx_texts(cell._tc, cell)
 
 
+def _check_docx_archive(data: bytes) -> None:
+    """解压前看 zip 目录：成员太多或声明的解压总量太大就拒绝。"""
+    try:
+        with zipfile.ZipFile(BytesIO(data)) as archive:
+            members = archive.infolist()
+    except Exception as exc:  # BadZipFile、截断、异常的目录项都算读不了
+        raise DetectError("parse_failed") from exc
+    if len(members) > MAX_DOCX_ENTRIES or sum(m.file_size for m in members) > MAX_DOCX_UNCOMPRESSED_BYTES:
+        raise DetectError("archive_too_large")
+
+
 def _extract_docx(data: bytes) -> ExtractedText:
+    _check_docx_archive(data)
     try:
         from docx import Document
 
