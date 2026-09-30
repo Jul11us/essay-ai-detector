@@ -13,3 +13,5 @@ dist/
 experiments/models/
 /experiments/benchmark-private/
 /experiments/vanguard-result.json
+playwright-report/
+test-results/

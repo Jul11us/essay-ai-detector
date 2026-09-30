@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./src/setupTests.ts",
+    // e2e/ 下是 Playwright 的用例，不归 vitest 管。
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });
