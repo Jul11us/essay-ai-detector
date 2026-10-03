@@ -42,6 +42,7 @@ COPY backend/requirements.txt ./
 RUN pip install -r requirements.txt ${PIP_INDEX_URL:+--index-url "$PIP_INDEX_URL"}
 
 COPY backend/app ./app
+COPY backend/benchmark.py backend/calibration.py ./
 COPY experiments/download_model.py /app/experiments/download_model.py
 COPY --from=frontend /build/dist /app/frontend-dist
 

@@ -1,4 +1,4 @@
-"""句长波动。人写的文章长短句会跳，模型稿常常差不多长。"""
+"""Describe sentence-length variation without inferring authorship."""
 
 from __future__ import annotations
 
@@ -28,15 +28,15 @@ def measure_rhythm(text: str) -> dict:
     if cv < 0.22:
         label = "起伏很小"
         note = (
-            "句长几乎拉成一条水平线：长句和短句拉不开。"
-            "这种均匀节奏容易被判成机械生成。可以故意拆开长判断句，或补进短句。"
+            "句子长度较为接近，折线起伏较小。"
+            "这只描述长度分布，不能判断文字来源，也不是模型分数的因果解释。"
         )
     elif cv < 0.45:
         label = "起伏一般"
-        note = "句长有变化，但还不算大。如果分数偏高，优先改那些又长又整齐的句子。"
+        note = "句子长度有一定变化。这个统计只描述长度分布，请结合内容与上下文阅读；它不能解释模型分数。"
     else:
         label = "起伏明显"
-        note = "句长波动比较大，更接近人写时长短交替的样子。这只解释节奏，不单独决定分数。"
+        note = "句子长度变化较大，长短句交替比较明显。人写和 AI 文本都可能出现这种变化，不能据此判断来源。"
     return {
         "lengths": shown,
         "mean": round(mean, 1),

@@ -46,6 +46,22 @@ def test_preview_rejects_bad_upload():
     assert r.json()["error"] == "parse_failed"
 
 
+def test_preview_language_hint_uses_text_after_display_limit():
+    c = TestClient(app)
+    raw = ("English text. " * 420 + "中文正文内容。" * 160).encode("utf-8")
+    r = c.post("/api/preview", files={"file": ("mixed.txt", raw, "text/plain")})
+    assert r.status_code == 200
+    assert r.json()["truncated"] is True
+    assert "中文" not in r.json()["text"]
+    assert r.json()["language_hint"] == "bi"
+
+
+def test_preview_unknown_language_is_explicit():
+    c = TestClient(app)
+    r = c.post("/api/preview", files={"file": ("numbers.txt", b"1234567890", "text/plain")})
+    assert r.json()["language_hint"] is None
+
+
 def test_inflating_docx_gets_a_clear_error_on_both_upload_paths(monkeypatch):
     """压缩后只有几 KB、解压后巨大的 docx：预览和检测都要在解析前拒绝，且错误文案可读。"""
     import zipfile

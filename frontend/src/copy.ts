@@ -79,6 +79,7 @@ export function formatResult(r: DetectOk): string {
   if (r.mixed_variance) {
     lines.push("各段差异大，不宜只看一个总分。");
   }
+  if (r.calibration) lines.push(`整篇阈值：${r.calibration.note}`);
   if (r.rhythm) {
     lines.push(`句长节奏：${r.rhythm.label}。${r.rhythm.note}`);
   }

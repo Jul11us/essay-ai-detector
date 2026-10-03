@@ -1,65 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { suspectKey } from "./aggregate";
 import { VERDICT_LABEL, formatPercent } from "./copy";
 import { paraDomId, sentenceDomId } from "./domIds";
 import type { ParagraphHit } from "./types";
+import type { ReviewTarget } from "./ReviewSidebar";
+import { REVIEW_LABEL } from "./reviews";
 
 function sentenceClass(highlight: string | null, top: boolean): string | undefined {
   if (top) return "sent top";
   return highlight ? `sent ${highlight}` : undefined;
 }
 
-function ParagraphBody({
-  para,
-  lang,
-  topKeys,
-}: {
-  para: ParagraphHit;
-  lang: string;
-  topKeys: Set<string>;
+function ParagraphBody({ para, lang, topKeys, selected, onSelect }: {
+  para: ParagraphHit; lang: string; topKeys: Set<string>;
+  selected?: ReviewTarget | null; onSelect?: (target: ReviewTarget) => void;
 }) {
-  // 保留原下标：「嫌疑最重」按 sentences 数组里的位置记，过滤掉空句会错位。
-  const [selected, setSelected] = useState<number | null>(null);
-  const sentences = (para.sentences ?? [])
-    .map((sentence, index) => ({ sentence, index }))
-    .filter(({ sentence }) => sentence.text);
-  if (!sentences.length) {
-    return <p className="body">{para.text || para.excerpt}</p>;
-  }
-  const selectedSentence = selected === null ? null : para.sentences?.[selected] ?? null;
-  return (
-    <div>
-      <p className="body">
-        {sentences.map(({ sentence, index }, order) => {
-          const top = topKeys.has(suspectKey(para.index, index));
-          const content = sentence.score == null ? (
-            <span id={sentenceDomId(lang, para.index, index)}>{sentence.text}</span>
-          ) : (
-            <button
-              type="button"
-              id={sentenceDomId(lang, para.index, index)}
-              className={`sent-button ${sentenceClass(sentence.highlight, top) || "sent"}`}
-              title={`查看本句模型分数：${formatPercent(sentence.score)}%`}
-              aria-label={`${sentence.text}（第 ${para.index + 1} 段第 ${index + 1} 句，模型分数 ${formatPercent(sentence.score)}%，点击查看说明）`}
-              onClick={() => setSelected(index)}
-            >
-              {sentence.text}
-            </button>
-          );
-          return <span key={index}>{order > 0 ? " " : ""}{content}</span>;
-        })}
-      </p>
-      {selectedSentence?.score != null && (
-        <div className="sentence-detail" role="status">
-          <strong>第 {para.index + 1} 段第 {selected! + 1} 句 · 模型分数 {formatPercent(selectedSentence.score)}%</strong>
-          <p>单句与相邻句上下文各检测一次，取两者较低分。请连同前后句阅读。</p>
-          {selectedSentence.observations?.length
-            ? <p>可观察的套话：{selectedSentence.observations.map((item) => item.phrase).join("、")}。这不是分数的因果解释，也不是 AI 写作证据。</p>
-            : <p>本句未命中本站的套话清单；这不能解释分数高低。</p>}
-        </div>
-      )}
-    </div>
-  );
+  const sentences = (para.sentences ?? []).map((sentence,index) => ({sentence,index})).filter(({sentence}) => sentence.text);
+  if (!sentences.length) return <p className="body">{para.text || para.excerpt}</p>;
+  return <p className="body">{sentences.map(({sentence,index},order) => {
+    const top = topKeys.has(suspectKey(para.index,index));
+    const active = selected?.para === para.index && selected.sentence === index && selected.text === sentence.text;
+    return <span key={index}>{order > 0 ? " " : ""}{sentence.score == null
+      ? <span id={sentenceDomId(lang,para.index,index)}>{sentence.text}</span>
+      : <button type="button" id={sentenceDomId(lang,para.index,index)}
+        className={`sent-button ${sentenceClass(sentence.highlight,top) || "sent"} ${active ? "selected" : ""}`}
+        title={`查看本句模型分数：${formatPercent(sentence.score)}%`}
+        aria-label={`${sentence.text}（第 ${para.index+1} 段第 ${index+1} 句，模型分数 ${formatPercent(sentence.score)}%，点击查看说明）`}
+        aria-expanded={active} aria-controls={active ? `sentence-detail-${lang}-${para.index}` : undefined}
+        onClick={() => onSelect?.({para:para.index,sentence:index,text:sentence.text})}>
+        {sentence.text}{sentence.review && <span className={`sentence-review-badge ${sentence.review.state}`} aria-label={`人工复核：${REVIEW_LABEL[sentence.review.state]}`}> · {REVIEW_LABEL[sentence.review.state]}</span>}
+      </button>}</span>;
+  })}</p>;
 }
 
 export function Para({
@@ -70,6 +41,7 @@ export function Para({
   rechecking,
   onRecheck,
   onScan,
+  selected, onSelect,
 }: {
   para: ParagraphHit;
   lang: string;
@@ -78,8 +50,12 @@ export function Para({
   rechecking: boolean;
   onRecheck: (index: number, text: string) => Promise<string | null>;
   onScan: (index: number) => Promise<void>;
+  selected?: ReviewTarget | null; onSelect?: (target: ReviewTarget) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const editField = useRef<HTMLTextAreaElement>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
   const [draft, setDraft] = useState(para.text || para.excerpt);
   const [localError, setLocalError] = useState<string | null>(null);
   const located = (para.sentences ?? []).some((s) => s.score != null);
@@ -89,6 +65,11 @@ export function Para({
   useEffect(() => {
     setDraft(para.text || para.excerpt);
   }, [para.text, para.excerpt, para.score]);
+  useEffect(() => {
+    if (editing) editField.current?.focus();
+    else if (wasEditing.current) editButton.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
 
   async function submit() {
     setLocalError(null);
@@ -110,6 +91,7 @@ export function Para({
       </header>
       {editing ? (
         <textarea
+          ref={editField}
           className="para-edit"
           value={draft}
           aria-label={`修改第 ${para.index + 1} 段`}
@@ -117,7 +99,7 @@ export function Para({
           rows={6}
         />
       ) : (
-        <ParagraphBody para={para} lang={lang} topKeys={topKeys} />
+        <ParagraphBody para={para} lang={lang} topKeys={topKeys} selected={selected} onSelect={onSelect} />
       )}
       {para.sentenceNote && <p className="fine">{para.sentenceNote}</p>}
       <div className="para-actions">
@@ -141,6 +123,7 @@ export function Para({
           </>
         ) : (
           <button
+            ref={editButton}
             type="button"
             className="text-btn"
             disabled={locked || rechecking}

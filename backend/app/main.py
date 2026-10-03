@@ -1,23 +1,30 @@
 import asyncio
 import os
+import hashlib
+import json
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from pydantic import ValidationError
 
 from app.bilingual import run_bilingual
 from app.bodylimit import BodyLimitMiddleware
 from app.errors import DetectError
 from app.extract import MAX_UPLOAD_BYTES, extract_from_bytes
 from app.length import PREVIEW_MAX_CHARS, SECTION_MIN_CHARS
+from app.language import suggest_language
 from app.loader import ModelHub
 from app.markers import find_markers
 from app.pipeline import require_lang, run_detect, run_sentences
 from app.rhythm import measure_rhythm
+from app.evaluation import AnalyzeRequest, ManifestRequest, analyze_predictions, validate_samples
+from app.word_report import WordRequest, build_word_report
 from app.static import mount_frontend
+from app.document_scope import document_blocks, scoped_document, MAX_SCOPE_BLOCKS, MAX_SCOPE_CHARS
 
 hub = ModelHub()
 
@@ -129,13 +136,38 @@ async def detect_error_handler(request, exc: DetectError):
     )
 
 
-def _detect_document(cancel, lang, text, filename, file_bytes, floor):
+def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=None, fingerprint=None):
     score = cancellable(hub.score, cancel)
-    return run_detect(lang, text, filename, file_bytes, score, length_floor=floor)
+    extracted, coverage = None, None
+    if file_bytes is not None:
+        extracted, coverage = scoped_document(extract_from_bytes(filename or "upload.bin", file_bytes), filename or "upload.bin", file_bytes, selection, fingerprint)
+    elif selection is not None:
+        raise DetectError("invalid_selection")
+    result = run_detect(
+        lang, text, filename, file_bytes, score, length_floor=floor,
+        model_revision=hub.revisions.get(lang),
+        calibration_scope="paragraph" if floor is not None else "document",
+        extracted_override=extracted,
+    )
+    if coverage is not None:
+        result["detection_scope"] = coverage
+    return result
 
 
-def _bilingual(cancel, text, en, zh, filename, file_bytes):
-    return run_bilingual(text, en, zh, filename, file_bytes, cancellable(hub.score, cancel))
+def _bilingual(cancel, text, en, zh, filename, file_bytes, selection=None, fingerprint=None):
+    coverage = None
+    if file_bytes is not None:
+        extracted, coverage = scoped_document(extract_from_bytes(filename or "upload.bin", file_bytes), filename or "upload.bin", file_bytes, selection, fingerprint)
+        text, en, zh, file_bytes = extracted.text, None, None, None
+    elif selection is not None:
+        raise DetectError("invalid_selection")
+    result = run_bilingual(text, en, zh, filename, file_bytes, cancellable(hub.score, cancel), model_revisions=hub.revisions)
+    if coverage is not None:
+        result["detection_scope"] = coverage
+        for side in ("en", "zh"):
+            if result[side] and "score" in result[side]:
+                result[side]["detection_scope"] = coverage
+    return result
 
 
 def _sentences(cancel, lang, text):
@@ -180,11 +212,17 @@ async def preview(request: Request):
     extracted = await asyncio.to_thread(
         extract_from_bytes, getattr(upload, "filename", "") or "", raw
     )
+    blocks = await asyncio.to_thread(document_blocks, extracted)
+    scope_available = len(blocks) <= MAX_SCOPE_BLOCKS and len(extracted.text) <= MAX_SCOPE_CHARS
     return {
         "text": extracted.text[:PREVIEW_MAX_CHARS],
         "truncated": len(extracted.text) > PREVIEW_MAX_CHARS,
         "char_count": len(extracted.text),
         "paragraph_count": len(extracted.natural_paragraphs or ()),
+        "language_hint": suggest_language(extracted.text),
+        "source_sha256": hashlib.sha256(raw).hexdigest(),
+        "blocks": blocks if scope_available else [],
+        "scope_available": scope_available,
     }
 
 
@@ -198,12 +236,21 @@ async def detect(request: Request):
     en = None
     zh = None
     scope = None
+    selection, fingerprint = None, None
     if "multipart/form-data" in ctype:
         form = await request.form()
         lang = form.get("lang")
         text = _str_field(form, "text")
         en = _str_field(form, "en")
         zh = _str_field(form, "zh")
+        fingerprint = _str_field(form, "source_sha256")
+        if "selection" in form:
+            try:
+                selection = json.loads(form["selection"])
+            except (TypeError, ValueError):
+                raise DetectError("invalid_selection")
+            if selection is None:
+                raise DetectError("invalid_selection")
         upload = form.get("file")
         if upload is not None and hasattr(upload, "read"):
             file_bytes = await _read_upload(upload)
@@ -217,17 +264,18 @@ async def detect(request: Request):
         en = _str_field(data, "en")
         zh = _str_field(data, "zh")
         scope = _str_field(data, "scope")
+        selection = data.get("selection")
     # 先校验语言再问模型：否则 lang=fr 且模型未加载时会返回 503 而不是 400。
     lang = require_lang(lang)
     hub.assert_ready(lang)
     if lang == "bi":
         return await run_until_disconnect(
-            request, _bilingual, text, en, zh, filename, file_bytes
+            request, _bilingual, text, en, zh, filename, file_bytes, selection, fingerprint
         )
     # 单段重测不能套整篇的 200 字符下限，否则改一句就被拒。
     floor = SECTION_MIN_CHARS if scope == "paragraph" else None
     return await run_until_disconnect(
-        request, _detect_document, lang, text, filename, file_bytes, floor
+        request, _detect_document, lang, text, filename, file_bytes, floor, selection, fingerprint
     )
 
 
@@ -252,6 +300,41 @@ async def explain_view(request: Request):
         raise DetectError("lang_required")
     text = _str_field(data, "text") or ""
     return {"markers": find_markers(text, lang), "rhythm": measure_rhythm(text)}
+
+
+@app.post("/api/reports/word")
+async def word_report(request: Request):
+    try:
+        payload = WordRequest.model_validate(await _json_object(request))
+    except ValidationError:
+        return JSONResponse({"error": "invalid_report", "message": "报告内容不完整或格式不正确，请重新检测后导出。"}, status_code=400)
+    content = await asyncio.to_thread(build_word_report, payload.result)
+    return Response(content, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    headers={"Content-Disposition": 'attachment; filename="ai-writing-report.docx"', "Cache-Control": "no-store"})
+
+
+@app.post("/api/evaluation/manifest")
+async def evaluation_manifest(request: Request):
+    try:
+        payload = ManifestRequest.model_validate(await _json_object(request))
+        samples = validate_samples(payload.samples)
+    except ValidationError:
+        return JSONResponse({"error": "invalid_manifest", "message": "样本清单格式不正确：检查编号、文件名、中英语言、human/ai/mixed 标签和来源字段。每批最多 1000 份。"}, status_code=400)
+    except ValueError as exc:
+        return JSONResponse({"error": "invalid_manifest", "message": str(exc)}, status_code=400)
+    return {"samples": samples}
+
+
+@app.post("/api/evaluation/analyze")
+async def evaluation_analyze(request: Request):
+    try:
+        payload = AnalyzeRequest.model_validate(await _json_object(request))
+        result = await asyncio.to_thread(analyze_predictions, payload)
+    except ValidationError:
+        return JSONResponse({"error": "invalid_evaluation", "message": "评测记录格式不正确：检查标签、0–1 分数、判定档位、来源和模型版本。每批最多 1000 份。"}, status_code=400)
+    except ValueError:
+        return JSONResponse({"error": "invalid_evaluation", "message": "评测记录存在重复样本、校准/测试组泄漏或模型版本不一致，请核对清单后重新导入。"}, status_code=400)
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
 # 单容器部署：DETECTOR_STATIC_DIR 指向前端构建产物，后端一并伺服。必须放在最后，

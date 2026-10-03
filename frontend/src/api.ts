@@ -7,7 +7,17 @@ export async function fetchStatus(): Promise<Status> {
   return r.json();
 }
 
-export type FilePreview = { text: string; char_count: number; paragraph_count: number; truncated: boolean };
+export type FilePreview = {
+  blocks?: { index: number; text: string; section: string; char_count: number }[];
+  source_sha256?: string;
+  scope_available?: boolean;
+  text: string;
+  char_count: number;
+  paragraph_count: number;
+  truncated: boolean;
+  /** 全文的语言提示；旧服务未提供时使用预览文字。 */
+  language_hint?: Lang | null;
+};
 
 export async function previewFile(file: File, signal?: AbortSignal): Promise<FilePreview | DetectErr> {
   const fd = new FormData();
@@ -27,6 +37,8 @@ export async function detect(
     zh?: string;
     /** 只重测一段时放宽整篇的最短长度。 */
     scope?: "paragraph";
+    selection?: number[];
+    source_sha256?: string;
   },
   signal?: AbortSignal,
 ): Promise<DetectResult> {
@@ -35,6 +47,10 @@ export async function detect(
     const fd = new FormData();
     fd.set("lang", args.lang);
     fd.set("file", args.file);
+    if (args.selection !== undefined) {
+      fd.set("selection", JSON.stringify(args.selection));
+      fd.set("source_sha256", args.source_sha256 ?? "");
+    }
     r = await fetch("/api/detect", { method: "POST", body: fd, signal });
   } else {
     r = await fetch("/api/detect", {

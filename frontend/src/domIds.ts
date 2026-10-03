@@ -14,8 +14,12 @@ export function jumpTo(id: string) {
   if (!el) return;
   const fold = el.closest("details");
   if (fold && !fold.open) fold.open = true;
-  el.scrollIntoView?.({ block: "center", behavior: "smooth" });
-  if (el instanceof HTMLButtonElement) el.click();
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView?.({ block: "center", behavior: reduced ? "auto" : "smooth" });
+  if (el instanceof HTMLButtonElement) {
+    el.focus({ preventScroll: true });
+    if (el.getAttribute("aria-expanded") !== "true") el.click();
+  }
   el.classList.remove("flash");
   // 强制回流，让同一处连点两次也能重新闪一下。
   void el.offsetWidth;

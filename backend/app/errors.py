@@ -1,6 +1,7 @@
 DISCLAIMER = "本结果仅表示开源模型的写作倾向，不能作为学术不端认定依据。"
 
 MESSAGES = {
+    "invalid_selection": "检测范围与当前文件不一致或没有选中段落。请重新预览文件并选择范围。",
     "lang_required": "请先选择中文、英文，或中英分开。",
     "bad_request": "请求格式不对。请刷新页面后重试。",
     "payload_too_large": "提交的内容太大（上限 20 MB）。请只提交正文文本。",
@@ -19,6 +20,7 @@ MESSAGES = {
 }
 
 HTTP_STATUS = {
+    "invalid_selection": 400,
     "lang_required": 400,
     "bad_request": 400,
     "payload_too_large": 400,

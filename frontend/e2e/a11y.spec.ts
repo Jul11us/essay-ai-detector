@@ -10,7 +10,7 @@ async function violations(page: Page) {
   return violations.map((v) => ({
     rule: v.id,
     impact: v.impact,
-    nodes: v.nodes.slice(0, 3).map((n) => n.target.join(" ")),
+    nodes: v.nodes.slice(0, 3).map((n) => ({ target: n.target.join(" "), detail: n.failureSummary })),
   }));
 }
 
@@ -41,10 +41,10 @@ test("batch summary table has none", async ({ page }) => {
   await page.getByRole("button", { name: "英文" }).first().click();
   const text = "My brother and I walked to the lake after school. The water was cold, so we only put our feet in and watched the ducks. We talked about the trip we wanted to take next summer and who would bring the map.";
   await page.locator('input[type="file"]').setInputFiles([
-    { name: "a.txt", mimeType: "text/plain", buffer: Buffer.from(text) },
-    { name: "b.txt", mimeType: "text/plain", buffer: Buffer.from(text) },
+    { name: "a.txt", mimeType: "text/plain", buffer: Buffer.from(`${text} ${text}`) },
+    { name: "b.txt", mimeType: "text/plain", buffer: Buffer.from(`${text} ${text}`) },
   ]);
   await page.getByRole("button", { name: "批量检测 2 个文件" }).click();
-  await expect(page.getByText("共 2 个文件，已处理 2 个")).toBeVisible();
+  await expect(page.getByText("共 2 个文件 · 完成 2 · 失败 0 · 已取消 0")).toBeVisible();
   expect(await violations(page)).toEqual([]);
 });

@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from app.aggregate import aggregate
+from app.calibration import resolve_calibration
 from app.errors import DISCLAIMER, DetectError
-from app.explain import basis, explain, reading, review_outlook
+from app.explain import basis, reading, review_outlook
 from app.extract import ExtractedText, extract_from_bytes
 from app.language import check_language
 from app.length import SENTENCE_REVIEW_MAX_CHARS, check_length, count_chars
@@ -31,9 +32,14 @@ def run_detect(
     score_fn: ScoreFn,
     *,
     length_floor: int | None = None,
+    model_revision: str | None = None,
+    calibration_scope: str = "document",
+    extracted_override: ExtractedText | None = None,
 ) -> dict:
     lang = require_lang(lang)
-    if file_bytes is not None:
+    if extracted_override is not None:
+        extracted = extracted_override
+    elif file_bytes is not None:
         extracted = extract_from_bytes(filename or "upload.bin", file_bytes)
     else:
         raw = (text or "").strip()
@@ -52,9 +58,13 @@ def run_detect(
         raise
     except Exception as exc:
         raise DetectError("infer_failed") from exc
-    agg = aggregate(parts, probs, lang)
     model_id = MODEL_IDS[lang]
+    calibration = resolve_calibration(
+        lang, model_id, model_revision, count_chars("".join(parts)), scope=calibration_scope,
+    )
+    agg = aggregate(parts, probs, lang, low=calibration["low"], high=calibration["high"])
     outlook = review_outlook(agg)
+    threshold_basis = basis(model_id, lang, low_score=calibration["low"], high_score=calibration["high"])
     return {
         "score": agg.score,
         "verdict": agg.verdict,
@@ -63,9 +73,11 @@ def run_detect(
         "char_count": agg.char_count,
         "word_count": agg.word_count,
         "model_id": model_id,
+        "model_revision": model_revision,
+        "calibration": calibration,
         "lang": lang,
-        "explanation": explain(agg, model_id, lang),
-        "basis": basis(model_id, lang),
+        "explanation": "\n".join([threshold_basis, reading(agg), calibration["note"]]),
+        "basis": threshold_basis,
         "reading": reading(agg),
         "review_risk": outlook.risk,
         "review_label": outlook.label,

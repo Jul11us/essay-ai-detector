@@ -12,7 +12,7 @@ class ReviewOutlook:
     detail: str
 
 
-def basis(model_id: str, lang: str) -> str:
+def basis(model_id: str, lang: str, *, low_score: float = LOW_SCORE, high_score: float = HIGH_SCORE) -> str:
     if lang == "zh":
         engine = (
             f"中文用开源模型 {model_id}。它把每一段映射成 0–100% 的模型原始分数，"
@@ -24,12 +24,12 @@ def basis(model_id: str, lang: str) -> str:
             "训练时见过大量人类文本和模型生成文本，输出一个未在本站作文样本上校准的分数。"
             "依据是写作分布像不像常见 AI 稿，不是「抓到生成记录」，也不是知网 / Turnitin。"
         )
-    low, high = round(LOW_SCORE * 100), round(HIGH_SCORE * 100)
+    low, high = round(low_score * 100, 1), round(high_score * 100, 1)
     return (
         engine
         + "总分由各段按字数加权，避免只看开头。分数不是文章里 AI 所写的字数比例。"
-        + f"本站暂用的经验档位：低于 {low}% 为较低，{low}%–{high}% 为不确定，"
-        + f"不低于 {high}% 且文本充分度不是「低」才标较高。这些档位尚未经过真实作文语料校准。"
+        + f"当前整篇档位：低于 {low:g}% 为较低，{low:g}%–{high:g}% 为不确定，"
+        + f"不低于 {high:g}% 且文本充分度不是「低」才标较高。作文适用性仍需真实作文语料验证。"
     )
 
 

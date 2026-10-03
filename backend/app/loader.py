@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 
 from app.errors import DetectError
+from app.model_identity import model_revision
 from app.sanity import check_zh_direction
 from app.scoring import (
     EN_INFER_STRIDE,
@@ -66,6 +67,7 @@ class ModelHub:
         self._label_check: dict[str, dict] = {}
         self._errors: dict[str, str] = {}
         self._runtimes = {"zh": "pytorch", "en": "pytorch"}
+        self.revisions: dict[str, str | None] = {}
         self._thread: threading.Thread | None = None
 
     def status(self) -> dict:
@@ -88,6 +90,7 @@ class ModelHub:
             # 「还在下」还是「失败了」，只能去嗅 detail 文案——那正是要避免的。
             "loading": self._thread is not None and self._thread.is_alive(),
             "runtime": dict(self._runtimes),
+            "model_revisions": dict(self.revisions),
         }
 
     def assert_ready(self, lang: str | None = None) -> None:
@@ -186,6 +189,7 @@ class ModelHub:
         # 1200 字符以内，这个流水线到不了 8192，按它配置等于假装用满长上下文。
         self._max_length["en"] = EN_INFER_TOKENS
         self._stride["en"] = EN_INFER_STRIDE
+        self.revisions["en"] = model_revision(path, self._runtimes["en"])
 
     def _download_zh(self) -> str:
         repo_id = MODEL_IDS["zh"]
@@ -266,6 +270,7 @@ class ModelHub:
         self._ai_index[lang] = ai_index
         self._max_length[lang] = max_length
         self._stride[lang] = stride
+        self.revisions[lang] = model_revision(Path(path), self._runtimes[lang])
 
     def _maybe_onnx(self, path: Path):
         """CPU 上如果旁边有导出的 ONNX，就用它。有显卡时仍走 PyTorch，避免改用 CPU ONNX。"""

@@ -8,6 +8,19 @@ _CJK = re.compile(
 _LATIN = re.compile(r"[A-Za-z]")
 
 
+def suggest_language(text: str) -> str | None:
+    """An input hint over the entire extracted file, before preview truncation."""
+    han = len(_CJK.findall(text))
+    latin = len(_LATIN.findall(text))
+    if han >= 20 and latin >= 40 and min(han, latin) / max(han, latin) >= 0.16:
+        return "bi"
+    if han >= 12 and han > latin * 0.4:
+        return "zh"
+    if latin >= 40 and latin > han * 2:
+        return "en"
+    return None
+
+
 def check_language(text: str, lang: str) -> None:
     cjk = len(_CJK.findall(text))
     latin = len(_LATIN.findall(text))

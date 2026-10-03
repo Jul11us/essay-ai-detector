@@ -572,3 +572,39 @@ describe("App 组件", () => {
     }
   });
 });
+
+describe("App 批量流程", () => {
+  it("未选择语言时按每个文件的全文提示检测，并保留中英混合结果", async () => {
+    const mixed = { lang: "bi", note: "中英独立计算", disclaimer: "fixture", en: RESULT, zh: { ...RESULT, lang: "zh" } };
+    let previews = 0;
+    const fetchMock = stubFetch(async (url, init) => {
+      if (url.includes("/api/status")) return jsonResponse(READY);
+      if (url.includes("/api/preview")) return jsonResponse({ text: "synthetic fixture", char_count: 100, paragraph_count: 1, truncated: false, language_hint: ++previews === 1 ? "en" : "bi" });
+      const data = init?.body as FormData;
+      return jsonResponse(data.get("lang") === "bi" ? mixed : RESULT);
+    });
+    render(<App />);
+    await screen.findByText(/中英文模型均已就绪/);
+    await userEvent.upload(screen.getByLabelText(/上传 \.txt/), [new File(["fixture"], "english.txt", { type: "text/plain" }), new File(["fixture"], "mixed.txt", { type: "text/plain" })]);
+    const go = screen.getByRole("button", { name: "批量检测 2 个文件" });
+    expect(go).toBeEnabled();
+    await userEvent.click(go);
+    expect(await screen.findByText("共 2 个文件 · 完成 2 · 失败 0 · 已取消 0")).toBeInTheDocument();
+    expect(detectCalls(fetchMock).map((call) => (call[1]?.body as FormData).get("lang"))).toEqual(["en", "bi"]);
+    await userEvent.click(screen.getByRole("button", { name: "查看 mixed.txt 的逐句结果" }));
+    expect(await screen.findByText("中英独立计算")).toBeInTheDocument();
+    expect(screen.getByText("检测结果 · 中文")).toBeInTheDocument();
+  });
+
+  it("选择超过 20 个文件时明确拒绝，保留已选择的一批", async () => {
+    stubFetch(async () => jsonResponse(READY));
+    render(<App />);
+    await screen.findByText(/中英文模型均已就绪/);
+    const upload = screen.getByLabelText(/上传 \.txt/);
+    await userEvent.upload(upload, [new File(["fixture"], "a.txt", { type: "text/plain" }), new File(["fixture"], "b.txt", { type: "text/plain" })]);
+    await userEvent.upload(upload, Array.from({ length: 21 }, (_, i) => new File(["fixture"], `${i}.txt`, { type: "text/plain" })));
+    expect(await screen.findByRole("alert")).toHaveTextContent("本次选择未添加");
+    expect(screen.getByText("批量检测 · 2 个文件")).toBeInTheDocument();
+    expect(screen.queryByText("批量检测 · 20 个文件")).not.toBeInTheDocument();
+  });
+});

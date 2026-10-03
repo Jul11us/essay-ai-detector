@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { MarkerPanel, RhythmChart, ScoreBars } from "./Insights";
 import { CompositionPanel } from "./CompositionPanel";
 import { suspectKey, topSuspects, type Suspect } from "./aggregate";
@@ -13,8 +14,13 @@ import {
 import { jumpTo, sentenceDomId } from "./domIds";
 import { buildResultCsv, buildResultJson, downloadCsv, downloadJson } from "./export";
 import { Para } from "./ParagraphView";
+import { CalibrationNote } from "./CalibrationNote";
 import { buildReportHtml, downloadReport, printReport } from "./report";
-import type { DetectOk } from "./types";
+import { WordReportButton } from "./WordReportButton";
+import { ExportMenu } from "./ExportMenu";
+import type { DetectOk, SentenceReview } from "./types";
+import { ScopeSummary } from "./ScopeSelector";
+import { ReviewSidebar, focusSentence, reviewItems, type ReviewTarget } from "./ReviewSidebar";
 
 export { Compare } from "./Compare";
 
@@ -46,23 +52,39 @@ export function ResultCard({
   data,
   copied,
   onCopy,
-  hasBaseline,
-  onSaveBaseline,
+  onSaveVersion,
+  active = true,
+  locked = false,
+  reviewEpoch,
   onRecheck,
   onScan,
   recheckingIndex,
   scanProgress,
+  onReview,
 }: {
   data: DetectOk;
   copied: boolean;
   onCopy: (data: DetectOk) => void;
-  hasBaseline: boolean;
-  onSaveBaseline: (data: DetectOk) => void;
+  onSaveVersion: () => void;
+  active?: boolean;
+  locked?: boolean;
+  reviewEpoch?: string;
   onRecheck: (index: number, text: string) => Promise<string | null>;
   onScan: (index: number) => Promise<void>;
   recheckingIndex: number | null;
   scanProgress: { done: number; total: number } | null;
+  onReview?: (para: number, sentence: number, text: string, review: SentenceReview | null) => void;
 }) {
+  const [selection, setSelection] = useState<ReviewTarget | null>(null);
+  const selected = active && selection && reviewItems(data).some((item) => item.para === selection.para && item.sentence === selection.sentence && item.text === selection.text) ? selection : null;
+  useEffect(() => { if (!active) setSelection(null); }, [active]);
+  function closeReview() {
+    if(selected) {
+      const target = selected;
+      setSelection(null);
+      requestAnimationFrame(() => focusSentence(data.lang,target));
+    }
+  }
   const percent = formatPercent(data.score);
   const shortParas = data.paragraphs.filter(isShortParagraph);
   const mainParas = data.paragraphs.filter((p) => !isShortParagraph(p));
@@ -98,9 +120,11 @@ export function ResultCard({
         </div>
       </div>
       <div className="result-actions">
+        <WordReportButton data={data} />
         <button type="button" className="text-btn" onClick={() => onCopy(data)}>
           {copied ? "已复制" : "复制结果"}
         </button>
+        <ExportMenu>
         <button type="button" className="text-btn" onClick={() => downloadReport(buildReportHtml(data), "ai-rate-report.html")}>
           导出 HTML 报告
         </button>
@@ -113,12 +137,15 @@ export function ResultCard({
         <button type="button" className="text-btn" onClick={() => downloadCsv(buildResultCsv(data), "ai-rate-result.csv")}>
           导出 CSV
         </button>
-        <button type="button" className="text-btn" onClick={() => onSaveBaseline(data)}>
-          {hasBaseline ? "用现在这份覆盖初稿" : "记下这份为初稿"}
+        </ExportMenu>
+        <button type="button" className="text-btn" disabled={locked} onClick={onSaveVersion}>
+          保存当前版本
         </button>
       </div>
       <div className="result-layout">
         <div className="manuscript">
+          {data.detection_scope && <ScopeSummary scope={data.detection_scope} />}
+          {data.paragraphs.some((p) => p.sentences?.some((s) => s.review)) && <p className="review-summary">人工复核：{["reviewed", "pending", "revise"].map((state) => `${state === "reviewed" ? "已复核" : state === "pending" ? "待确认" : "需修改"} ${data.paragraphs.flatMap((p) => p.sentences || []).filter((s) => s.review?.state === state).length} 句`).join(" · ")}</p>}
           <div className="manuscript-heading">
             <div>
               <p className="result-kicker">原文</p>
@@ -126,6 +153,7 @@ export function ResultCard({
             </div>
             <span>{data.paragraphs.length} 个段落</span>
           </div>
+          <p className="manuscript-help">点击原句查看说明并添加人工批注；在段落下方修改文字并重测。</p>
           {data.ignored && data.ignored.length > 0 && (
             <details className="ignored-blocks">
               <summary>{data.ignored.length} 处文字未参与评分（标题、过短内容或参考文献）</summary>
@@ -154,10 +182,12 @@ export function ResultCard({
                 para={p}
                 lang={data.lang}
                 topKeys={topKeys}
-                locked={false}
+                locked={locked}
                 rechecking={recheckingIndex === p.index}
                 onRecheck={onRecheck}
                 onScan={onScan}
+                selected={selected}
+                onSelect={setSelection}
               />
             ))}
           </ol>
@@ -171,17 +201,21 @@ export function ResultCard({
                     para={p}
                     lang={data.lang}
                     topKeys={topKeys}
-                    locked={false}
+                    locked={locked}
                     rechecking={recheckingIndex === p.index}
                     onRecheck={onRecheck}
                     onScan={onScan}
+                    selected={selected}
+                    onSelect={setSelection}
                   />
                 ))}
               </ol>
             </details>
           )}
         </div>
-        <aside className="analysis-sidebar" aria-label={`检测分析 · ${data.lang === "zh" ? "中文" : "英文"}`}>
+        <aside className={`analysis-sidebar ${selected ? "has-selection" : ""}`} aria-label={`检测分析 · ${data.lang === "zh" ? "中文" : "英文"}`}>
+          {selected && <ReviewSidebar key={reviewEpoch} data={data} selected={selected} onSelect={setSelection} onClose={closeReview} onReview={onReview} />}
+          <details className="whole-analysis" open={!selected}><summary>全文分析</summary>
           <CompositionPanel lang={data.lang} comp={comp} />
           <SuspectList lang={data.lang} suspects={suspects} />
           <div className="analysis-section">
@@ -193,6 +227,7 @@ export function ResultCard({
             <p className="model-name">检测模型：{data.model_id}</p>
             <p>{data.basis || data.explanation}</p>
             <p>{data.reading}</p>
+            <CalibrationNote info={data.calibration} />
             <p>文本充分度：{CONF_LABEL[data.confidence]}。这一档只由文本长度和各段分数一致程度计算，不能表示模型判断正确的概率。</p>
             <p>{data.disclaimer}</p>
           </details>
@@ -200,6 +235,7 @@ export function ResultCard({
             <MarkerPanel markers={data.markers} />
             <RhythmChart rhythm={data.rhythm} />
           </div>
+          </details>
         </aside>
       </div>
     </section>

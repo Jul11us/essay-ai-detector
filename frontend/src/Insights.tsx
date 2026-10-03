@@ -47,7 +47,8 @@ export function RhythmChart({ rhythm }: { rhythm?: Rhythm }) {
       <p className="fine">{rhythm.note}</p>
       {points && (
         <svg viewBox={`0 0 ${w} ${h}`} className="rhythm-svg" role="img" aria-label={rhythm.note}>
-          <polyline fill="none" stroke="#3f5c4a" strokeWidth="2" points={points} />
+          <path d="M6 24H314M6 52H314M6 82H314" className="rhythm-grid" />
+          <polyline fill="none" stroke="currentColor" strokeWidth="2" points={points} />
         </svg>
       )}
     </aside>

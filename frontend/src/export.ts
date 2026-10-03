@@ -29,6 +29,9 @@ const RESULT_HEADER = [
   "verdict",
   "highlight",
   "text",
+  "review_status",
+  "review_note",
+  "review_updated_at",
 ];
 
 const prob = (n: number) => Number(n.toFixed(4));
@@ -39,7 +42,7 @@ function resultRows(data: DetectOk): Cell[][] {
   for (const p of data.paragraphs) {
     const sentences = (p.sentences ?? []).filter((s) => s.text);
     if (!sentences.length) {
-      rows.push([data.lang, p.index + 1, "", prob(p.score), prob(p.score), p.verdict, "", p.text || p.excerpt]);
+      rows.push([data.lang, p.index + 1, "", prob(p.score), prob(p.score), p.verdict, "", p.text || p.excerpt, "", "", ""]);
       continue;
     }
     sentences.forEach((s, i) => {
@@ -52,6 +55,9 @@ function resultRows(data: DetectOk): Cell[][] {
         s.verdict ?? "",
         s.highlight ?? "",
         s.text,
+        s.review?.state,
+        s.review?.note,
+        s.review?.updated_at,
       ]);
     });
   }
@@ -89,19 +95,25 @@ export function exportCsvFor(data: Outcome): string {
 
 const BATCH_HEADER = ["file", "status", "language", "score", "verdict", "confidence", "characters", "message"];
 
-/** 批量汇总：每个文件一行。没出分数的文件保留状态和原因。 */
+/** 批量汇总：混合文件按语言分行，不合成总分；未出分保留状态和原因。 */
 export function buildBatchCsv(rows: BatchRow[]): string {
-  return toCsv([
-    BATCH_HEADER,
-    ...rows.map((r) => [
-      r.name,
-      r.status,
-      r.result?.lang ?? "",
-      r.result ? prob(r.result.score) : "",
-      r.result?.verdict ?? "",
-      r.result?.confidence ?? "",
-      r.result?.char_count ?? "",
-      r.message ?? "",
-    ]),
-  ]);
+  const output: Cell[][] = [BATCH_HEADER];
+  for (const row of rows) {
+    if (row.result && isBilingual(row.result)) {
+      let written = false;
+      for (const lang of ["en", "zh"] as const) {
+        const part = row.result[lang];
+        if (!part) continue;
+        written = true;
+        output.push(isSectionErr(part)
+          ? [row.name, "error", lang, "", "", "", "", part.message]
+          : [row.name, "done", lang, prob(part.score), part.verdict, part.confidence, part.char_count, ""]);
+      }
+      if (written) continue;
+    }
+    const data = row.result && !isBilingual(row.result) ? row.result : undefined;
+    output.push([row.name, row.status, data?.lang ?? row.lang ?? "", data ? prob(data.score) : "",
+      data?.verdict ?? "", data?.confidence ?? "", data?.char_count ?? "", row.message ?? ""]);
+  }
+  return toCsv(output);
 }

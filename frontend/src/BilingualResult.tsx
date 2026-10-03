@@ -3,6 +3,8 @@ import { buildBilingualCsv, buildResultJson, downloadCsv, downloadJson } from ".
 import { buildBilingualReport, downloadReport, printReport } from "./report";
 import type { BilingualOk, DetectOk } from "./types";
 import { isSectionErr } from "./types";
+import { WordReportButton } from "./WordReportButton";
+import { ExportMenu } from "./ExportMenu";
 
 export function BilingualResult({
   data,
@@ -15,6 +17,8 @@ export function BilingualResult({
     <div className="bilingual">
       <p className="fine">{data.note}</p>
       <div className="result-actions">
+        <WordReportButton data={data} combined />
+        <ExportMenu>
         <button
           type="button"
           className="text-btn"
@@ -31,6 +35,7 @@ export function BilingualResult({
         <button type="button" className="text-btn" onClick={() => downloadCsv(buildBilingualCsv(data), "ai-rate-result.csv")}>
           导出合并 CSV
         </button>
+        </ExportMenu>
       </div>
       <h2 className="paras-title">英文部分</h2>
       {data.en && isSectionErr(data.en) && <p className="fail">{data.en.message}</p>}

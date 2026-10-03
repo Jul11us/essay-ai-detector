@@ -10,6 +10,7 @@ export function useFileInput(onChange: () => void) {
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [selection, setSelectionState] = useState<number[] | undefined>(undefined);
   const previewAbort = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -19,6 +20,7 @@ export function useFileInput(onChange: () => void) {
     onChange();
     setFilePreview(null);
     setPreviewError(null);
+    setSelectionState(undefined);
     if (!next) {
       if (fileInputRef.current) fileInputRef.current.value = "";
       setPreviewBusy(false);
@@ -41,5 +43,11 @@ export function useFileInput(onChange: () => void) {
       });
   };
 
-  return { file, filePreview, previewBusy, previewError, fileInputRef, onFile };
+  const setSelection = (indices: number[]) => { setSelectionState(indices); onChange(); };
+  const restore = (next: File | null, preview: FilePreview | null, indices?: number[]) => {
+    previewAbort.current?.abort();
+    previewAbort.current = null;
+    setFile(next); setFilePreview(preview); setPreviewBusy(false); setPreviewError(null); setSelectionState(indices);
+  };
+  return { file, filePreview, previewBusy, previewError, fileInputRef, onFile, selection, setSelection, restore };
 }

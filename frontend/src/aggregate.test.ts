@@ -31,6 +31,56 @@ function doc(paragraphs: DetectOk["paragraphs"]): DetectOk {
 }
 
 describe("replaceParagraph", () => {
+  it("distinguishes original file scope from edited and rescored text", () => {
+    const current = doc([{ index: 0, text: "Original body.", excerpt: "Original body.", score: .2, verdict: "low", char_count: 400 }]);
+    current.detection_scope = { source_name: "paper.txt", source_sha256: "a".repeat(64), total_blocks: 6, selected_blocks: 1, total_chars: 1000, selected_chars: 400, excluded: [], note: "分数仅对应所选文字。" };
+    const changed = doc([{ index: 0, text: "Edited body.", excerpt: "Edited body.", score: .1, verdict: "low", char_count: 500 }]);
+    const next = replaceParagraph(current, 0, changed);
+    expect(next.detection_scope?.selected_chars).toBe(400);
+    expect(next.detection_scope?.note).toContain("正文已在复核中修改");
+    expect(next.char_count).toBe(500);
+    expect(replaceParagraph(next, 0, changed).detection_scope?.note).toBe(next.detection_scope?.note);
+  });
+  it("keeps verified document thresholds during paragraph edits without changing paragraph bands", () => {
+    const current = doc([
+      { index: 0, excerpt: "a", score: 0.65, verdict: "uncertain", char_count: 400 },
+      { index: 1, excerpt: "b", score: 0.65, verdict: "uncertain", char_count: 400 },
+    ]);
+    current.calibration = { status: "validated", applied: true, low: 0.2, high: 0.6,
+      evaluation_unit: "document", note: "测试范围内", applicability: { char_count: { min: 500, max: 1600 } } };
+    const next = replaceParagraph(current, 1, doc([current.paragraphs[1]]));
+    expect(next.verdict).toBe("high");
+    expect(next.paragraphs.every((p) => p.verdict === "uncertain")).toBe(true);
+    expect(next.calibration?.applied).toBe(true);
+  });
+
+  it("restores default thresholds and explanation when edits leave the evaluated length range", () => {
+    const current = doc([
+      { index: 0, excerpt: "a", score: 0.65, verdict: "uncertain", char_count: 400 },
+      { index: 1, excerpt: "b", score: 0.65, verdict: "uncertain", char_count: 400 },
+    ]);
+    current.basis = "模型依据。当前整篇档位：低于 20% 为较低。作文适用性仍需真实作文语料验证。";
+    current.calibration = { status: "validated", applied: true, low: 0.2, high: 0.6,
+      evaluation_unit: "document", note: "测试范围内", applicability: { char_count: { min: 700, max: 1600 } } };
+    const next = replaceParagraph(current, 1, doc([
+      { index: 0, excerpt: "short", score: 0.65, verdict: "uncertain", char_count: 100 },
+    ]));
+    expect(next.verdict).toBe("uncertain");
+    expect(next.calibration?.applied).toBe(false);
+    expect(next.basis).toContain("75.0%");
+    expect(next.explanation).not.toContain("20%");
+  });
+
+  it("never uses candidate document thresholds in local reaggregation", () => {
+    const current = doc([
+      { index: 0, excerpt: "a", score: 0.65, verdict: "uncertain", char_count: 400 },
+      { index: 1, excerpt: "b", score: 0.65, verdict: "uncertain", char_count: 400 },
+    ]);
+    current.calibration = { status: "candidate", applied: false, low: 0.2, high: 0.6,
+      evaluation_unit: "document", note: "尚未通过测试" };
+    expect(replaceParagraph(current, 1, doc([current.paragraphs[1]])).verdict).toBe("uncertain");
+  });
+
   it("reweights the document from the edited paragraph", () => {
     const current = doc([
       { index: 0, excerpt: "a", text: "a", score: 0.2, verdict: "low", char_count: 100 },

@@ -16,7 +16,10 @@ import {
   type SentenceScan,
 } from "./api";
 import { canSubmit, formatResult } from "./copy";
-import type { DetectOk, Lang } from "./types";
+import type { DetectOk, Lang, SentenceReview } from "./types";
+import { keepReviews } from "./reviews";
+import { recordReview } from "./writingProcess";
+import { appendVersion, ensureVersions, recordRecheck } from "./versions";
 import { isBilingual, isSectionErr } from "./types";
 
 // 兜底：正常长文几十秒就结束，十分钟还没回来说明后端卡住了，
@@ -41,7 +44,7 @@ function applyScan(
     if ((p.text || p.excerpt) !== sentText) return p;
     if (typeof data === "string") return { ...p, sentences: [], sentenceNote: data };
     if (isDetectErr(data)) return { ...p, sentences: [], sentenceNote: data.message };
-    return { ...p, sentences: data.sentences, sentenceNote: data.note || undefined };
+    return { ...p, sentences: keepReviews(p.sentences || [], data.sentences), sentenceNote: data.note || undefined };
   });
 }
 
@@ -50,6 +53,8 @@ function clone<T>(value: T): T {
 }
 
 export type DetectInput = {
+  selection?: number[];
+  source_sha256?: string;
   lang: Lang | null;
   text: string;
   file: File | null;
@@ -67,7 +72,7 @@ export function useDetector() {
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<Outcome | null>(null);
-  const [baseline, setBaseline] = useState<Outcome | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<{ done: number; total: number } | null>(null);
@@ -148,9 +153,9 @@ export function useDetector() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanToken]);
 
-  /** 输入变了：丢掉上一份结果和初稿，掐掉还在跑的逐句任务。 */
+  /** 输入变了：清空当前结果，掐掉还在跑的逐句任务。任务记录保留版本历史。 */
   function reset() {
-    setBaseline(null);
+
     scanEpoch.current = 0;
     scanAbort.current?.abort();
     setResult(null);
@@ -158,18 +163,18 @@ export function useDetector() {
   }
 
   /** 把已经算好的一份结果（批量检测里的某个文件）接进来，之后和单篇检测一样可以逐句定位、重测、导出。 */
-  function adopt(data: DetectOk) {
+  function adopt(data: Outcome) {
     const mine = ++gen.current;
     scanAbort.current?.abort();
-    setBaseline(null);
+
     setError(null);
     setCopied(null);
-    setResult(data);
+    setResult(ensureVersions(data, "已存结果 · 历史起点"));
     scanEpoch.current = mine;
     setScanToken(mine);
   }
 
-  /** 改了正文：只清掉结果，初稿留着做对比。 */
+  /** 改了输入正文：清掉当前结果，已有任务和版本仍在任务中心。 */
   function forgetResult() {
     setResult(null);
     setCopied(null);
@@ -199,14 +204,14 @@ export function useDetector() {
     }, DETECT_TIMEOUT_MS);
     try {
       const data = await detect(
-        { lang, text, file, en: enText, zh: zhText },
+        { lang, text, file, en: enText, zh: zhText, selection: input.selection, source_sha256: input.source_sha256 },
         ctrl.signal,
       );
       if (mine !== gen.current) return;
       if (isDetectErr(data)) {
         setError(data.message);
       } else {
-        setResult(data);
+        setResult(ensureVersions(data));
         scanEpoch.current = mine;
         setScanToken(mine);
       }
@@ -252,6 +257,7 @@ export function useDetector() {
       if (isDetectErr(data) || isBilingual(data)) {
         return isDetectErr(data) ? data.message : "这一段没有返回分数。";
       }
+      if (data.model_id !== doc.model_id || (doc.model_revision && data.model_revision && doc.model_revision !== data.model_revision)) return "检测模型版本已变化，请重新检测整篇，再继续修改与对比。当前结果已保留。";
       let next = replaceParagraph(doc, index, data);
       try {
         const explained = await fetchExplain({
@@ -269,9 +275,9 @@ export function useDetector() {
       setResult((cur) => {
         if (!cur) return cur;
         // 重测期间整篇逐句打分还在跑，其它段可能刚拿到句子分数；别用发请求时的旧快照盖掉。
-        if (side === "single" && !isBilingual(cur)) return carrySentences(cur, merged);
+        if (side === "single" && !isBilingual(cur)) return recordRecheck(cur, carrySentences(cur, merged), `第 ${index + 1} 段重测`);
         const part = isBilingual(cur) && side !== "single" ? cur[side] : null;
-        if (part && !isSectionErr(part)) return { ...cur, [side]: carrySentences(part, merged) };
+        if (part && !isSectionErr(part)) return recordRecheck(cur, { ...cur, [side]: carrySentences(part, merged), detection_scope: merged.detection_scope ?? cur.detection_scope }, `${side === "en" ? "英文" : "中文"}第 ${index + 1} 段重测`);
         return cur;
       });
       // 改过的这一段自动重新逐句打分，不用再点「定位」。
@@ -312,16 +318,32 @@ export function useDetector() {
     setResult((cur) => applyScan(cur, side, index, body, data));
   }
 
-  function saveBaseline(data: DetectOk) {
-    if (result && isBilingual(result)) setBaseline(clone(result));
-    else setBaseline(clone(data));
+  function saveVersion(label = "手动保存") {
+    setResult((cur) => cur ? appendVersion(ensureVersions(cur), label.trim().slice(0,80) || "手动保存", "manual", true) : cur);
+  }
+  function restoreVersion(id: string) {
+    ++gen.current; scanEpoch.current = 0; scanAbort.current?.abort(); setScanProgress(null);
+    setResult((cur) => {
+      const version = cur?.version_history?.find((entry) => entry.id === id);
+      if (!cur || !version) return cur;
+      const saved = appendVersion(cur, "恢复前的复核记录", "manual", false, "checkpoint");
+      const restored = deferUnscanned(clone(version.result));
+      return appendVersion({ ...restored, version_history: saved.version_history, writing_process: saved.writing_process }, `恢复自 ${version.label}`, "restore", true);
+    });
+  }
+
+  function reviewSentence(side: Side, paraIndex: number, sentenceIndex: number, expectedText: string, review: SentenceReview | null) {
+    setResult((cur) => cur ? recordReview(cur, mapParagraph(cur, side, paraIndex, (para) => {
+      if (para.sentences?.[sentenceIndex]?.text !== expectedText) return para;
+      return { ...para, sentences: para.sentences.map((sentence, i) => i === sentenceIndex ? { ...sentence, review: review ?? undefined } : sentence) };
+    }), side, paraIndex, sentenceIndex, expectedText, review) : cur);
   }
 
   return {
     busy,
     elapsed,
     result,
-    baseline,
+
     error,
     copied,
     scanProgress,
@@ -335,6 +357,9 @@ export function useDetector() {
     copy,
     recheck: onRecheck,
     scan: onScan,
-    saveBaseline,
+
+    saveVersion,
+    restoreVersion,
+    reviewSentence,
   };
 }

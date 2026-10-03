@@ -48,7 +48,10 @@ def paragraph_verdict(score: float) -> str:
     return "uncertain"
 
 
-def aggregate(paragraphs: list[str], probs: list[float], lang: str) -> AggregateResult:
+def aggregate(
+    paragraphs: list[str], probs: list[float], lang: str,
+    *, low: float = LOW_SCORE, high: float = HIGH_SCORE,
+) -> AggregateResult:
     if len(paragraphs) != len(probs):
         raise ValueError("paragraphs and probs length mismatch")
     weights = [count_chars(p) for p in paragraphs]
@@ -66,9 +69,9 @@ def aggregate(paragraphs: list[str], probs: list[float], lang: str) -> Aggregate
     else:
         confidence = "medium"
     mixed_variance = std >= 0.25
-    if score < LOW_SCORE:
+    if score < low:
         verdict = "low"
-    elif score >= HIGH_SCORE and confidence != "low":
+    elif score >= high and confidence != "low":
         verdict = "high"
     else:
         verdict = "uncertain"
