@@ -1,9 +1,9 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useTaskLibrary } from "./useTaskLibrary";
-import { loadTasks, putTask } from "./tasks";
+import { clearTasks, loadTasks, putTask } from "./tasks";
 import type { SingleTask } from "./tasks";
-vi.mock("./tasks",async(importOriginal) => ({...await importOriginal<typeof import("./tasks")>(),loadTasks:vi.fn(),putTask:vi.fn()}));
+vi.mock("./tasks",async(importOriginal) => ({...await importOriginal<typeof import("./tasks")>(),loadTasks:vi.fn(),putTask:vi.fn(),clearTasks:vi.fn()}));
 const task = {schema:1,id:"fixture",title:"Original",kind:"single",state:"complete",file_names:["original.txt"],created_at:"now",updated_at:"now",result:{score:.2}} as SingleTask;
 describe("task rename persistence",() => {
   it("retains input and original file metadata and stores the trimmed title",async() => {
@@ -24,5 +24,25 @@ describe("task rename persistence",() => {
     expect(result.current.get(task.id)?.title).toBe("Original");
     expect(result.current.get(task.id)).toMatchObject({result:{score:.8}});
     expect(putTask).toHaveBeenLastCalledWith(expect.objectContaining({title:"Original",result:expect.objectContaining({score:.8})}));
+  });
+});
+describe("clearing every task",() => {
+  it("empties the library and refuses late saves for the cleared tasks",async() => {
+    vi.mocked(loadTasks).mockResolvedValue([task]); vi.mocked(putTask).mockResolvedValue(); vi.mocked(clearTasks).mockResolvedValue();
+    const {result}=renderHook(useTaskLibrary); await waitFor(()=>expect(result.current.tasks).toHaveLength(1));
+    let ok=false; await act(async()=>{ok=await result.current.removeAll();});
+    expect(ok).toBe(true); expect(clearTasks).toHaveBeenCalledTimes(1);
+    expect(result.current.tasks).toEqual([]); expect(result.current.get(task.id)).toBeUndefined();
+    vi.mocked(putTask).mockClear();
+    await act(async()=>{await result.current.save(task);});
+    expect(putTask).not.toHaveBeenCalled();
+    expect(result.current.tasks).toEqual([]);
+  });
+  it("keeps the tasks and reports an error when storage refuses",async() => {
+    vi.mocked(loadTasks).mockResolvedValue([task]); vi.mocked(clearTasks).mockRejectedValue(new Error("blocked"));
+    const {result}=renderHook(useTaskLibrary); await waitFor(()=>expect(result.current.tasks).toHaveLength(1));
+    let ok=true; await act(async()=>{ok=await result.current.removeAll();});
+    expect(ok).toBe(false); expect(result.current.tasks).toHaveLength(1);
+    expect(result.current.error).toContain("清空未完成");
   });
 });

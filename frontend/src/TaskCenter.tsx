@@ -9,14 +9,16 @@ export function taskProgress(task: SavedTask, active: boolean) {
   return { total, done, state };
 }
 const STATES: Record<string, string> = { running: "正在运行", complete: "已完成", failed: "检测失败", paused: "可继续" };
-export function TaskCenter({ tasks, ready, error, pending, activeIds, locked, onOpen, onStop, onDelete, onRename }: {
+export function TaskCenter({ tasks, ready, error, pending, activeIds, locked, onOpen, onStop, onDelete, onClearAll, onRename }: {
   tasks: SavedTask[]; ready: boolean; error: string; pending: number; activeIds: string[]; locked: boolean;
-  onOpen: (task: SavedTask) => Promise<void>; onStop: (task: SavedTask) => void; onDelete: (id: string) => Promise<void>;
+  onOpen: (task: SavedTask) => Promise<void>; onStop: (task: SavedTask) => void; onDelete: (id: string) => Promise<void>; onClearAll: () => Promise<void>;
   onRename: (id: string, title: string) => Promise<void>;
 }) {
   const [opening, setOpening] = useState<string | null>(null);
   const [localError, setLocalError] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [status, setStatus] = useState("all");
@@ -37,6 +39,18 @@ export function TaskCenter({ tasks, ready, error, pending, activeIds, locked, on
       <label>任务排序<select aria-label="任务排序" value={sort} onChange={(e) => setSort(e.target.value)}><option value="updated">最近更新</option><option value="created">最近创建</option><option value="name">名称顺序</option></select></label>
     </div>
     <div className="task-list-caption"><span>{filtered.length} / {tasks.length} 个任务</span>{ready && !!tasks.length && !error && <span role="status">{pending ? "正在保存任务进度…" : "已保存到本机"}</span>}</div>
+    {ready && !!tasks.length && <div className="task-clear-all">
+      <button type="button" className="text-btn" disabled={locked || activeIds.length > 0 || opening !== null || savingName || clearing} onClick={() => setConfirmingAll(true)}>清空全部本机任务</button>
+      {activeIds.length > 0 && <span className="fine">有任务正在运行，结束或停止后才能清空。</span>}
+    </div>}
+    {confirmingAll && !!tasks.length && <div className="task-delete-confirm" role="alertdialog" aria-labelledby="clear-all-title">
+      <p id="clear-all-title">清空全部 {tasks.length} 个任务的原文件、结果、版本与批注？包括当前没有显示出来的筛选之外的任务。已下载的报告会保留，此操作不能撤销。</p>
+      <button type="button" disabled={clearing} onClick={async () => {
+        setClearing(true); setLocalError("");
+        try { await onClearAll(); setConfirmingAll(false); } catch(e) { setLocalError(e instanceof Error ? e.message : "清空失败"); } finally { setClearing(false); }
+      }}>{clearing ? "正在清空…" : "确认清空"}</button>
+      <button type="button" disabled={clearing} onClick={() => setConfirmingAll(false)}>保留任务</button>
+    </div>}
     {(error || localError) && <p role="alert" className="fail">{localError || error}</p>}
     {!ready && <p role="status">正在读取本机任务…</p>}
     {ready && !tasks.length && <div className="evaluation-empty"><h3>等待你的第一份任务</h3><p>开始单篇检测、批量检测或样本评测后，进度会出现在这里。</p></div>}

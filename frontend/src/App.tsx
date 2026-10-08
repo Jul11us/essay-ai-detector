@@ -177,6 +177,10 @@ export default function App() {
       if (task.result) { detector.adopt(task.result); setAwaitingResult(true); }
     }
   };
+  const clearAllTasks = async () => {
+    if (!await library.removeAll()) return;
+    setSingleTaskId(null); setBatchTaskId(null); setEvaluationTaskId(null);
+  };
   const deleteTask = async (id: string) => {
     if (!await library.remove(id)) return;
     if (singleTaskId === id) setSingleTaskId(null);
@@ -216,7 +220,7 @@ export default function App() {
       </header>
       <div id="workspace-content" tabIndex={-1}>
       <EvaluationPanel active={view === "evaluation"} models={status?.models} onBusyChange={setEvaluationBusy} library={library} restored={restoredEvaluation} onTaskChange={setEvaluationTaskId} controlRef={evaluationControl} />
-      {view === "tasks" && <TaskCenter tasks={library.tasks} ready={library.ready} error={library.error} pending={library.pending} locked={locked} activeIds={[...(busy && singleTaskId ? [singleTaskId] : []), ...(batch.running && batchTaskId ? [batchTaskId] : []), ...(evaluationBusy && evaluationTaskId ? [evaluationTaskId] : [])]} onOpen={openTask} onRename={library.rename} onDelete={deleteTask} onStop={(task) => { if (task.kind === "batch") batch.cancel(); else if (task.kind === "evaluation") evaluationControl.current?.cancel(); else detector.cancel(); }} />}
+      {view === "tasks" && <TaskCenter tasks={library.tasks} ready={library.ready} error={library.error} pending={library.pending} locked={locked} activeIds={[...(busy && singleTaskId ? [singleTaskId] : []), ...(batch.running && batchTaskId ? [batchTaskId] : []), ...(evaluationBusy && evaluationTaskId ? [evaluationTaskId] : [])]} onOpen={openTask} onRename={library.rename} onDelete={deleteTask} onClearAll={clearAllTasks} onStop={(task) => { if (task.kind === "batch") batch.cancel(); else if (task.kind === "evaluation") evaluationControl.current?.cancel(); else detector.cancel(); }} />}
       <div hidden={view !== "detect"}>
       <WorkspaceIntro />
       {library.error && <p role="status" className="task-save-warning">{library.error}</p>}

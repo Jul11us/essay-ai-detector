@@ -749,3 +749,11 @@ progress { width: 100%; height: 8px; accent-color: var(--blue); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.task-clear-all {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  margin: 0.4rem 0 0.8rem;
+}

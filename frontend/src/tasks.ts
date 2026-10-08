@@ -68,6 +68,20 @@ export function removeTask(id: string): Promise<void> {
   });
 }
 
+/** 清空所有任务和它们的原文件。已清掉的 id 记入 `removed`，仍在排队的旧保存请求不会把它们写回来。 */
+export function clearTasks(): Promise<void> {
+  return serialize(async () => {
+    const connection = await db();
+    await new Promise<void>((resolve, reject) => {
+      const tx = connection.transaction(["tasks", "files"], "readwrite");
+      const keys = tx.objectStore("tasks").getAllKeys();
+      tx.objectStore("tasks").clear(); tx.objectStore("files").clear();
+      tx.oncomplete = () => { for (const key of keys.result) removed.add(String(key)); resolve(); };
+      tx.onerror = tx.onabort = () => reject(tx.error);
+    });
+  });
+}
+
 function read<T>(store: string, key?: string): Promise<T> {
   return db().then((connection) => new Promise<T>((resolve, reject) => {
     const request = key === undefined ? connection.transaction(store).objectStore(store).getAll() : connection.transaction(store).objectStore(store).get(key);

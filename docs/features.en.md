@@ -32,7 +32,7 @@ The **Writing process timeline** records actual detection, paragraph rechecks, a
 
 ## Task center
 
-The **Task center** stores up to 50 detection, batch and evaluation jobs in this browser's IndexedDB, including input text, original files, results, versions and notes. Search names or original filenames, combine type and status filters, sort jobs, and rename them. Refreshing interrupts the queue; reopen a task and manually continue its unfinished items. Completed predictions are retained. Tasks can be deleted individually; clearing site data also removes them. Storage is specific to the browser and site address. See the [usage guide](review-tasks-scope.md).
+The **Task center** stores up to 50 detection, batch and evaluation jobs in this browser's IndexedDB, including input text, original files, results, versions and notes. Search names or original filenames, combine type and status filters, sort jobs, and rename them. Refreshing interrupts the queue; reopen a task and manually continue its unfinished items. Completed predictions are retained. Tasks can be deleted individually, or all at once with **Clear all local tasks** (it asks for confirmation, cannot be undone, and is unavailable while a task is running); clearing site data also removes them. Storage is specific to the browser and site address. See the [usage guide](review-tasks-scope.md).
 
 ## Screenshots
 

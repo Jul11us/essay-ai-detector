@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadTasks, MAX_SAVED_TASKS, putTask, removeTask, type NewTask, type SavedTask } from "./tasks";
+import { clearTasks, loadTasks, MAX_SAVED_TASKS, putTask, removeTask, type NewTask, type SavedTask } from "./tasks";
 
 export function useTaskLibrary() {
   const [tasks, setTasks] = useState<SavedTask[]>([]);
@@ -51,6 +51,15 @@ export function useTaskLibrary() {
       return true;
     } catch { setError("删除未完成，请重试；本机记录可能仍然存在。"); return false; }
   }, []);
+  const removeAll = useCallback(async () => {
+    try {
+      await clearTasks();
+      for (const task of current.current) deleted.current.add(task.id);
+      current.current = []; setTasks([]);
+      setError("");
+      return true;
+    } catch { setError("清空未完成，请重试；本机记录可能仍然存在。"); return false; }
+  }, []);
   const get = useCallback((id: string) => current.current.find((t) => t.id === id), []);
   const rename = useCallback(async (id: string, title: string) => {
     const original = current.current.find((t) => t.id === id);
@@ -73,7 +82,7 @@ export function useTaskLibrary() {
       throw new Error("任务名称未能保存，请重试。");
     } finally { setPending((n) => n - 1); }
   }, [update]);
-  return { tasks, ready, error, pending, create, save, remove, get, rename };
+  return { tasks, ready, error, pending, create, save, remove, removeAll, get, rename };
 }
 
 export type TaskLibrary = ReturnType<typeof useTaskLibrary>;
