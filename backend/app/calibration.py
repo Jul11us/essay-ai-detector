@@ -8,7 +8,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from calibration import wilson_interval
+from app.calibration_fit import wilson_interval
 
 DEFAULT_LOW = 0.40
 DEFAULT_HIGH = 0.75

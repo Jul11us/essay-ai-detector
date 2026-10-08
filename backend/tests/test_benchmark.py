@@ -5,7 +5,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from benchmark import load_manifest, main, make_records, run_api, summarize
+from app.evaluation_stats import make_records, summarize
+from benchmark import load_manifest, main, run_api
 
 
 def test_counts_false_flags_and_misses_without_treating_mixed_as_binary():

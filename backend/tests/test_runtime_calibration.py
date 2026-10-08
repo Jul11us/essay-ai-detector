@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app import calibration
 from app.scoring import MODEL_IDS
-from calibration import wilson_interval
+from app.calibration_fit import wilson_interval
 
 REVISION = "sha256:" + "a" * 64
 

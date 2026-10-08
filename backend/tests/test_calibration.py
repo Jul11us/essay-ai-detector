@@ -3,7 +3,7 @@ import hashlib
 
 import pytest
 
-from calibration import build_profile, document_verdict, fit_thresholds, threshold_metrics, validate_split_groups, wilson_interval
+from app.calibration_fit import build_profile, document_verdict, fit_thresholds, threshold_metrics, validate_split_groups, wilson_interval
 
 
 def records(n=30, lang="en"):
