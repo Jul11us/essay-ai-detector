@@ -1,19 +1,22 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 // Native disclosure keeps every format reachable with a keyboard and avoids a custom menu focus trap.
 export function ExportMenu({ children }: { children: ReactNode }) {
   const menu = useRef<HTMLDetailsElement>(null);
-  const [open, setOpen] = useState(false);
+  // The listeners are attached once and read the live `open` state of the element. They used to be
+  // attached from an effect that only ran after the asynchronous `toggle` event and a React
+  // re-render, so Escape or an outside press right after opening was silently dropped.
   useEffect(() => {
-    if (!open) return;
     const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !menu.current?.contains(event.target) && menu.current)
-        menu.current.open = false;
+      const details = menu.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target))
+        details.open = false;
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && menu.current) {
-        menu.current.open = false;
-        menu.current.querySelector("summary")?.focus();
+      const details = menu.current;
+      if (event.key === "Escape" && details?.open) {
+        details.open = false;
+        details.querySelector("summary")?.focus();
       }
     };
     document.addEventListener("pointerdown", outside);
@@ -22,13 +25,9 @@ export function ExportMenu({ children }: { children: ReactNode }) {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
     };
-  }, [open]);
+  }, []);
   return (
-    <details
-      ref={menu}
-      className="export-menu"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
+    <details ref={menu} className="export-menu">
       <summary>
         <span>更多导出</span> <span aria-hidden="true">⌄</span>
       </summary>
