@@ -34,6 +34,7 @@ Push-Location backend
 ..\.venv-detector\Scripts\python.exe -m pytest -q
 Pop-Location
 npm --prefix frontend run lint
+npm --prefix frontend run format:check
 npm --prefix frontend test -- --run
 npm --prefix frontend run build
 ```
@@ -63,3 +64,13 @@ CPU 可选 ONNX INT8 路径：先安装 `backend/requirements-onnx.txt`，再运
 ## 设计背景
 
 第一版的设计说明保留在 [design/initial-spec.md](design/initial-spec.md)，其中写了模型选择、英文推理预算和错误文案的由来。它是历史文档，部分内容（例如“不做 PDF”）已经过时，文件顶部有说明。
+
+## 代码格式
+
+前端用 Prettier（配置在 `frontend/.prettierrc.json`）。提交前运行 `npm --prefix frontend run format` 自动整理；CI 会运行 `format:check`，格式不对会失败。
+
+整体重排版的那个提交已记在 `.git-blame-ignore-revs`。GitHub 的 blame 会自动跳过它；本地想让 `git blame` 也跳过，执行一次：
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
