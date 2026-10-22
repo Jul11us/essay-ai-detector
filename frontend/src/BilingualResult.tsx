@@ -19,22 +19,34 @@ export function BilingualResult({
       <div className="result-actions">
         <WordReportButton data={data} combined />
         <ExportMenu>
-        <button
-          type="button"
-          className="text-btn"
-          onClick={() => downloadReport(buildBilingualReport(data), "ai-rate-report.html")}
-        >
-          导出合并报告
-        </button>
-        <button type="button" className="text-btn" onClick={() => printReport(buildBilingualReport(data))}>
-          打印合并报告
-        </button>
-        <button type="button" className="text-btn" onClick={() => downloadJson(buildResultJson(data), "ai-rate-result.json")}>
-          导出合并 JSON
-        </button>
-        <button type="button" className="text-btn" onClick={() => downloadCsv(buildBilingualCsv(data), "ai-rate-result.csv")}>
-          导出合并 CSV
-        </button>
+          <button
+            type="button"
+            className="text-btn"
+            onClick={() => downloadReport(buildBilingualReport(data), "ai-rate-report.html")}
+          >
+            导出合并报告
+          </button>
+          <button
+            type="button"
+            className="text-btn"
+            onClick={() => printReport(buildBilingualReport(data))}
+          >
+            打印合并报告
+          </button>
+          <button
+            type="button"
+            className="text-btn"
+            onClick={() => downloadJson(buildResultJson(data), "ai-rate-result.json")}
+          >
+            导出合并 JSON
+          </button>
+          <button
+            type="button"
+            className="text-btn"
+            onClick={() => downloadCsv(buildBilingualCsv(data), "ai-rate-result.csv")}
+          >
+            导出合并 CSV
+          </button>
         </ExportMenu>
       </div>
       <h2 className="paras-title">英文部分</h2>

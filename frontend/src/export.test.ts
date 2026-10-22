@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildBilingualCsv,
-  buildResultCsv,
-  buildResultJson,
-  csvCell,
-  toCsv,
-} from "./export";
+import { buildBilingualCsv, buildResultCsv, buildResultJson, csvCell, toCsv } from "./export";
 import type { BilingualOk, DetectOk } from "./types";
 
 const DOC: DetectOk = {
@@ -37,7 +31,14 @@ const DOC: DetectOk = {
         { text: "Short.", score: null, verdict: null, highlight: null },
       ],
     },
-    { index: 1, excerpt: "Plain paragraph", text: "Plain paragraph", score: 0.1, verdict: "low", char_count: 200 },
+    {
+      index: 1,
+      excerpt: "Plain paragraph",
+      text: "Plain paragraph",
+      score: 0.1,
+      verdict: "low",
+      char_count: 200,
+    },
   ],
 };
 
@@ -64,14 +65,29 @@ describe("csvCell", () => {
 describe("buildResultCsv", () => {
   it("writes one row per sentence, and one per paragraph when there are no sentence scores", () => {
     const lines = buildResultCsv(DOC).trimEnd().split("\r\n");
-    expect(lines[0]).toBe("language,paragraph,sentence,score,paragraph_score,verdict,highlight,text,review_status,review_note,review_updated_at");
+    expect(lines[0]).toBe(
+      "language,paragraph,sentence,score,paragraph_score,verdict,highlight,text,review_status,review_note,review_updated_at",
+    );
     expect(lines).toHaveLength(4);
     expect(lines[1]).toBe('en,1,1,0.9123,0.8,high,high,"First, second.",,,');
     expect(lines[2]).toBe("en,1,2,,0.8,,,Short.,,,");
     expect(lines[3]).toBe("en,2,,0.1,0.1,low,,Plain paragraph,,,");
   });
   it("exports review notes with spreadsheet formula protection", () => {
-    const data: DetectOk = { ...DOC, paragraphs: [{ ...DOC.paragraphs[0], sentences: [{ ...DOC.paragraphs[0].sentences![0], review: {state: "reviewed", note: "=SUM(A1)", updated_at: "2026-10-03T10:00:00Z"} }] }] };
+    const data: DetectOk = {
+      ...DOC,
+      paragraphs: [
+        {
+          ...DOC.paragraphs[0],
+          sentences: [
+            {
+              ...DOC.paragraphs[0].sentences![0],
+              review: { state: "reviewed", note: "=SUM(A1)", updated_at: "2026-10-03T10:00:00Z" },
+            },
+          ],
+        },
+      ],
+    };
     expect(buildResultCsv(data)).toContain(",reviewed,'=SUM(A1),2026-10-03T10:00:00Z");
   });
 });
@@ -102,6 +118,11 @@ describe("buildResultJson", () => {
 
 describe("toCsv", () => {
   it("ends every row with CRLF", () => {
-    expect(toCsv([["a", "b"], [1, 2]])).toBe("a,b\r\n1,2\r\n");
+    expect(
+      toCsv([
+        ["a", "b"],
+        [1, 2],
+      ]),
+    ).toBe("a,b\r\n1,2\r\n");
   });
 });

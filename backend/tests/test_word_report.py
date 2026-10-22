@@ -85,3 +85,11 @@ def test_scope_and_excluded_originals_are_in_word_and_bad_reviews_are_rejected()
     assert "选中 1 / 3" in text and "Excluded appendix preserved verbatim." in text
     data["paragraphs"][0]["sentences"][0]["review"] = {"state": "reviewed", "note": "bad\u0001note", "updated_at": "now"}
     assert TestClient(app).post("/api/reports/word", json={"result": data}).status_code == 400
+
+
+def test_score_is_labelled_as_a_raw_model_score_not_an_ai_rate():
+    """“AI 率”会被读成 AI 所写文字的占比；标签自己要写明是模型原始分数。"""
+    response = TestClient(app).post("/api/reports/word", json={"result": result()})
+    text = "\n".join(p.text for p in Document(BytesIO(response.content)).paragraphs)
+    assert "AI 倾向分数（模型原始分数） 55.0%" in text
+    assert "AI 率" not in text

@@ -25,7 +25,10 @@ function pstdev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
-export function reaggregate(paragraphs: { score: number; char_count: number }[], thresholds?: { low: number; high: number }): {
+export function reaggregate(
+  paragraphs: { score: number; char_count: number }[],
+  thresholds?: { low: number; high: number },
+): {
   score: number;
   verdict: Verdict;
   confidence: Confidence;
@@ -34,9 +37,7 @@ export function reaggregate(paragraphs: { score: number; char_count: number }[],
 } {
   const total = paragraphs.reduce((sum, p) => sum + p.char_count, 0);
   const raw =
-    total === 0
-      ? 0
-      : paragraphs.reduce((sum, p) => sum + p.score * p.char_count, 0) / total;
+    total === 0 ? 0 : paragraphs.reduce((sum, p) => sum + p.score * p.char_count, 0) / total;
   const score = round4(raw);
   const std = pstdev(paragraphs.map((p) => p.score));
   let confidence: Confidence;
@@ -129,15 +130,21 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
   let calibration: CalibrationInfo | undefined = doc.calibration;
   const extent = calibration?.applicability?.char_count;
   if (calibration?.applied && extent && (total < extent.min || total > extent.max)) {
-    calibration = { ...calibration, applied: false, low: 0.4, high: 0.75,
-      note: "修改后文本长度超出校准样本范围；当前使用默认展示门槛。段落和句子着色尚未校准。" };
+    calibration = {
+      ...calibration,
+      applied: false,
+      low: 0.4,
+      high: 0.75,
+      note: "修改后文本长度超出校准样本范围；当前使用默认展示门槛。段落和句子着色尚未校准。",
+    };
   }
   const stats = reaggregate(paragraphs, calibration?.applied ? calibration : undefined);
   let basis = doc.basis;
   if (calibration && basis.includes("当前整篇档位：")) {
     const low = calibration.applied ? calibration.low : 0.4;
     const high = calibration.applied ? calibration.high : 0.75;
-    basis = basis.split("当前整篇档位：")[0] +
+    basis =
+      basis.split("当前整篇档位：")[0] +
       `当前整篇档位：低于 ${(low * 100).toFixed(1)}% 为较低，${(low * 100).toFixed(1)}%–${(high * 100).toFixed(1)}% 为不确定，` +
       `不低于 ${(high * 100).toFixed(1)}% 且文本充分度不是「低」才标较高。作文适用性仍需真实作文语料验证。`;
   }
@@ -167,9 +174,15 @@ export function replaceParagraph(doc: DetectOk, index: number, piece: DetectOk):
   ].map((p, i) => ({ ...p, index: i }));
   const next = applyStats(doc, paragraphs);
   const prior = doc.paragraphs.find((p) => p.index === index);
-  const edited = incoming.map((p) => p.text || p.excerpt).join("\n\n") !== (prior?.text || prior?.excerpt);
+  const edited =
+    incoming.map((p) => p.text || p.excerpt).join("\n\n") !== (prior?.text || prior?.excerpt);
   if (edited && next.detection_scope && !next.detection_scope.note.includes("正文已在复核中修改")) {
-    next.detection_scope = { ...next.detection_scope, note: next.detection_scope.note + " 正文已在复核中修改并重测；以上段落和字符数量记录原文件的选择范围，当前分数对应报告中的修改后正文。" };
+    next.detection_scope = {
+      ...next.detection_scope,
+      note:
+        next.detection_scope.note +
+        " 正文已在复核中修改并重测；以上段落和字符数量记录原文件的选择范围，当前分数对应报告中的修改后正文。",
+    };
   }
   return next;
 }
@@ -243,7 +256,8 @@ export function carrySentences(from: DetectOk, to: DetectOk): DetectOk {
     const hit = byText.get(p.text || p.excerpt);
     if (!hit) return p;
     changed = true;
-    if (p.sentences != null) return { ...p, sentences: keepReviews(hit.sentences || [], p.sentences) };
+    if (p.sentences != null)
+      return { ...p, sentences: keepReviews(hit.sentences || [], p.sentences) };
     return { ...p, sentences: hit.sentences, sentenceNote: hit.sentenceNote };
   });
   return changed ? { ...to, paragraphs } : to;

@@ -10,8 +10,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from benchmark import summarize
-from calibration import build_profile, validate_split_groups
+from app.evaluation_stats import summarize
+from app.calibration_fit import build_profile, validate_split_groups
 
 Short = Annotated[str, Field(min_length=1, max_length=500, strict=True)]
 Probability = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False, strict=True)]

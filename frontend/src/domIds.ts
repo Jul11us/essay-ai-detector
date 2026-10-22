@@ -27,5 +27,7 @@ export function jumpTo(id: string) {
 }
 
 export function unitDomId(lang: string, u: Unit): string {
-  return u.sentIndex === null ? paraDomId(lang, u.paraIndex) : sentenceDomId(lang, u.paraIndex, u.sentIndex);
+  return u.sentIndex === null
+    ? paraDomId(lang, u.paraIndex)
+    : sentenceDomId(lang, u.paraIndex, u.sentIndex);
 }

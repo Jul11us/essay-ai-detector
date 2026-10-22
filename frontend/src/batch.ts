@@ -41,7 +41,9 @@ export function initialRows(files: File[]): BatchRow[] {
 export function batchParts(result: Outcome | undefined): DetectOk[] {
   if (!result) return [];
   return isBilingual(result)
-    ? [result.en, result.zh].filter((part): part is DetectOk => Boolean(part && !isSectionErr(part)))
+    ? [result.en, result.zh].filter((part): part is DetectOk =>
+        Boolean(part && !isSectionErr(part)),
+      )
     : [result];
 }
 
@@ -79,10 +81,15 @@ export async function runBatch(
         onRow(i, { name, status: "error", message: preview.message });
         continue;
       }
-      const hint = options.languageOverrides?.[i] ??
+      const hint =
+        options.languageOverrides?.[i] ??
         ("language_hint" in preview ? preview.language_hint : suggestLanguage(preview.text));
       if (!hint) {
-        onRow(i, { name, status: "error", message: "无法自动识别语言。请在本行选择中文、英文或中英分开，再重试。" });
+        onRow(i, {
+          name,
+          status: "error",
+          message: "无法自动识别语言。请在本行选择中文、英文或中英分开，再重试。",
+        });
         continue;
       }
       lang = hint;
@@ -94,7 +101,9 @@ export async function runBatch(
       } else if (isBilingual(data)) {
         const errors = (["en", "zh"] as const).flatMap((side) => {
           const part = data[side];
-          return part && isSectionErr(part) ? [`${side === "en" ? "英文" : "中文"}：${part.message}`] : [];
+          return part && isSectionErr(part)
+            ? [`${side === "en" ? "英文" : "中文"}：${part.message}`]
+            : [];
         });
         const hasScore = batchParts(data).length > 0;
         onRow(i, {
@@ -112,8 +121,11 @@ export async function runBatch(
         name,
         status: signal.aborted ? "cancelled" : "error",
         lang,
-        message: timedOut ? "超过 10 分钟已自动取消，可重试此文件。" : signal.aborted
-          ? "已取消，可重新检测。" : "文件提取或本机推理失败，可重试此文件。",
+        message: timedOut
+          ? "超过 10 分钟已自动取消，可重试此文件。"
+          : signal.aborted
+            ? "已取消，可重新检测。"
+            : "文件提取或本机推理失败，可重试此文件。",
       });
     } finally {
       clearTimeout(timer);

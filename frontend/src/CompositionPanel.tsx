@@ -29,9 +29,12 @@ export function CompositionPanel({ lang, comp }: { lang: string; comp: Compositi
         ))}
       </div>
       <p className="compo-legend">
-        <span className="key ai" />较高分 {pct(comp.ai)}
-        <span className="key unclear" />不确定 {pct(comp.unclear)}
-        <span className="key human" />较低分 {pct(comp.human)}
+        <span className="key ai" />
+        较高分 {pct(comp.ai)}
+        <span className="key unclear" />
+        不确定 {pct(comp.unclear)}
+        <span className="key human" />
+        较低分 {pct(comp.human)}
       </p>
       <p className="compo-detail">{comp.detail}</p>
       <p className="fine">{basisNote} 色条从左到右就是原文顺序，点一格跳到那一句。</p>
@@ -41,7 +44,11 @@ export function CompositionPanel({ lang, comp }: { lang: string; comp: Compositi
           <ol>
             {comp.spans.map((span) => (
               <li key={unitDomId(lang, span.first)}>
-                <button type="button" className="suspect-row" onClick={() => jumpTo(unitDomId(lang, span.first))}>
+                <button
+                  type="button"
+                  className="suspect-row"
+                  onClick={() => jumpTo(unitDomId(lang, span.first))}
+                >
                   <span className="suspect-score">{pct(span.share)}</span>
                   <span className="suspect-where">{spanPlace(span)}</span>
                   <span className="suspect-text">
