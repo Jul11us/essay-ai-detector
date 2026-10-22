@@ -202,7 +202,7 @@ def _scope_section(doc, scope: DetectionScope | None):
 def _language_section(doc, result: LanguageReport):
     doc.add_heading("中文部分" if result.lang == "zh" else "英文部分", level=1)
     summary = doc.add_paragraph()
-    lead = summary.add_run(f"AI 率（模型估计） {result.score:.1%} · {VERDICT[result.verdict]}\n")
+    lead = summary.add_run(f"AI 倾向分数（模型原始分数） {result.score:.1%} · {VERDICT[result.verdict]}\n")
     lead.bold = True
     lead.font.size = Pt(16)
     summary.add_run(f"文本充分度：{CONFIDENCE[result.confidence]} · 非空白字符 {result.char_count} · 词数 {result.word_count}")

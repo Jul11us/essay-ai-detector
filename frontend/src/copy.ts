@@ -38,8 +38,11 @@ export const CONF_LABEL: Record<Confidence, string> = {
   high: "高",
 };
 
-export const AI_RATE_LABEL = "AI 率（模型估计）";
-export const AI_RATE_NOTE = "基于模型原始分数，未经作文样本校准；不代表 AI 所写字数占比。";
+// 标签本身要守得住：截图、批量表、复制出去的文字往往只剩标签和数字，脚注会丢。
+// 所以不用“率”（会被读成 AI 所写文字的占比），并在标签里写明这是模型原始分数。
+export const AI_SCORE_LABEL = "AI 倾向分数（模型原始分数）";
+export const AI_SCORE_SHORT = "AI 倾向分数";
+export const AI_SCORE_NOTE = "未经作文样本校准；不是 AI 所写字数占比，也不是作者为 AI 的概率。";
 
 export function formatPercent(score: number): string {
   const p = score * 100;
@@ -66,8 +69,8 @@ export function formatResult(r: DetectOk): string {
   const lines = [
     `语言：${lang}`,
     `模型：${r.model_id}`,
-    `${AI_RATE_LABEL}：${formatPercent(r.score)}%（${VERDICT_LABEL[r.verdict]}；未经作文样本校准）`,
-    AI_RATE_NOTE,
+    `${AI_SCORE_LABEL}：${formatPercent(r.score)}%（${VERDICT_LABEL[r.verdict]}；未经作文样本校准）`,
+    AI_SCORE_NOTE,
     `文本充分度：${CONF_LABEL[r.confidence]}（只由文本长度和段落分数计算）`,
     compositionLine(r),
     "判定依据：",

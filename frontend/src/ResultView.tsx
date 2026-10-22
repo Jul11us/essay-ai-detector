@@ -4,8 +4,8 @@ import { CompositionPanel } from "./CompositionPanel";
 import { suspectKey, topSuspects, type Suspect } from "./aggregate";
 import { composition } from "./composition";
 import {
-  AI_RATE_LABEL,
-  AI_RATE_NOTE,
+  AI_SCORE_LABEL,
+  AI_SCORE_NOTE,
   CONF_LABEL,
   SHORT_PARAGRAPH_CHARS,
   formatPercent,
@@ -130,13 +130,13 @@ export function ResultCard({
         <div
           className={`result-score ${data.verdict}`}
           role="group"
-          aria-label={`全文${AI_RATE_LABEL}：${percent}%`}
+          aria-label={`全文${AI_SCORE_LABEL}：${percent}%`}
         >
           <span className="result-score-label">
-            全文 AI 率 <span>模型估计</span>
+            全文 AI 倾向分数 <span>模型原始分数</span>
           </span>
           <strong>{percent}%</strong>
-          <small>{AI_RATE_NOTE}</small>
+          <small>{AI_SCORE_NOTE}</small>
         </div>
       </div>
       <div className="result-actions">

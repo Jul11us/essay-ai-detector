@@ -74,6 +74,8 @@ describe("formatResult", () => {
     const text = formatResult(SAMPLE);
     expect(text).toContain("未经作文样本校准");
     expect(text).not.toContain("作业审查");
+    expect(text).toContain("AI 倾向分数（模型原始分数）");
+    expect(text).not.toContain("AI 率");
   });
 
   it("marks over-short paragraphs in the copied text too", () => {

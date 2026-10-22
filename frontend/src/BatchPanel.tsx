@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Outcome } from "./aggregate";
 import { batchParts, type BatchRow, type BatchStatus } from "./batch";
-import { AI_RATE_LABEL, AI_RATE_NOTE, VERDICT_LABEL, formatPercent } from "./copy";
+import { AI_SCORE_NOTE, AI_SCORE_SHORT, VERDICT_LABEL, formatPercent } from "./copy";
 import { buildBatchCsv, downloadCsv } from "./export";
 import { LANGUAGE_LABEL } from "./languageHint";
 import type { Lang } from "./types";
@@ -132,7 +132,7 @@ export function BatchPanel({
               <th scope="col">文件</th>
               <th scope="col">状态</th>
               <th scope="col">语言</th>
-              <th scope="col">{AI_RATE_LABEL}</th>
+              <th scope="col">{AI_SCORE_SHORT}</th>
               <th scope="col">档位</th>
               <th scope="col">
                 <span className="sr-only">操作</span>
@@ -241,7 +241,7 @@ export function BatchPanel({
         </table>
       </div>
       <p className="fine">
-        {AI_RATE_NOTE}各文件和语言单独计算，不能据此认定文字来源。导出包含全部文件，不受筛选影响。
+        {AI_SCORE_NOTE}各文件和语言单独计算，不能据此认定文字来源。导出包含全部文件，不受筛选影响。
       </p>
     </section>
   );
