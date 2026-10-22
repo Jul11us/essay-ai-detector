@@ -43,11 +43,28 @@ export function useFileInput(onChange: () => void) {
       });
   };
 
-  const setSelection = (indices: number[]) => { setSelectionState(indices); onChange(); };
+  const setSelection = (indices: number[]) => {
+    setSelectionState(indices);
+    onChange();
+  };
   const restore = (next: File | null, preview: FilePreview | null, indices?: number[]) => {
     previewAbort.current?.abort();
     previewAbort.current = null;
-    setFile(next); setFilePreview(preview); setPreviewBusy(false); setPreviewError(null); setSelectionState(indices);
+    setFile(next);
+    setFilePreview(preview);
+    setPreviewBusy(false);
+    setPreviewError(null);
+    setSelectionState(indices);
   };
-  return { file, filePreview, previewBusy, previewError, fileInputRef, onFile, selection, setSelection, restore };
+  return {
+    file,
+    filePreview,
+    previewBusy,
+    previewError,
+    fileInputRef,
+    onFile,
+    selection,
+    setSelection,
+    restore,
+  };
 }

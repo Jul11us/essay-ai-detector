@@ -39,7 +39,9 @@ async function stored(page: Page) {
   );
 }
 
-test("clear-all removes every saved task from the page and from IndexedDB, and stays gone after a reload", async ({ page }) => {
+test("clear-all removes every saved task from the page and from IndexedDB, and stays gone after a reload", async ({
+  page,
+}) => {
   await ready(page);
   await runExample(page, "英文演示");
   await page.getByRole("button", { name: "中文演示", exact: true }).click();
@@ -83,7 +85,9 @@ test("a new task after clear-all is saved normally", async ({ page }) => {
   expect((await stored(page)).tasks).toBe(1);
 });
 
-test("the task center with the clear-all confirmation open has no axe violations", async ({ page }) => {
+test("the task center with the clear-all confirmation open has no axe violations", async ({
+  page,
+}) => {
   await ready(page);
   await runExample(page, "英文演示");
   await openTasks(page);
@@ -92,5 +96,10 @@ test("the task center with the clear-all confirmation open has no axe violations
   const { violations } = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
     .analyze();
-  expect(violations.map((v) => ({ rule: v.id, nodes: v.nodes.slice(0, 2).map((n) => n.target.join(" ")) }))).toEqual([]);
+  expect(
+    violations.map((v) => ({
+      rule: v.id,
+      nodes: v.nodes.slice(0, 2).map((n) => n.target.join(" ")),
+    })),
+  ).toEqual([]);
 });

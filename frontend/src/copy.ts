@@ -84,9 +84,7 @@ export function formatResult(r: DetectOk): string {
     lines.push(`句长节奏：${r.rhythm.label}。${r.rhythm.note}`);
   }
   if (r.markers && r.markers.length) {
-    lines.push(
-      "特征词：" + r.markers.map((m) => `${m.phrase}×${m.count}`).join("，"),
-    );
+    lines.push("特征词：" + r.markers.map((m) => `${m.phrase}×${m.count}`).join("，"));
   }
   if (r.ignored?.length) {
     lines.push(`未参与评分：${r.ignored.map((item) => item.reason + "：" + item.text).join("；")}`);

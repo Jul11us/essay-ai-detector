@@ -1,6 +1,13 @@
 import type { BilingualOk, DetectOk, Rhythm } from "./types";
 import { isSectionErr } from "./types";
-import { AI_RATE_LABEL, AI_RATE_NOTE, CONF_LABEL, VERDICT_LABEL, formatPercent, isShortParagraph } from "./copy";
+import {
+  AI_RATE_LABEL,
+  AI_RATE_NOTE,
+  CONF_LABEL,
+  VERDICT_LABEL,
+  formatPercent,
+  isShortParagraph,
+} from "./copy";
 import { suspectKey, topSuspects } from "./aggregate";
 import { composition, spanPlace } from "./composition";
 import { downloadText } from "./download";
@@ -78,7 +85,13 @@ function sectionHtml(data: DetectOk): string {
             })
             .join(" ")
         : esc(p.text || p.excerpt);
-      const notes = (p.sentences || []).filter((s) => s.review).map((s) => `<blockquote><strong>人工复核：${REVIEW_LABEL[s.review!.state]}</strong><p>${esc(s.text)}</p><p>${esc(s.review!.note || "未填写备注")}</p></blockquote>`).join("");
+      const notes = (p.sentences || [])
+        .filter((s) => s.review)
+        .map(
+          (s) =>
+            `<blockquote><strong>人工复核：${REVIEW_LABEL[s.review!.state]}</strong><p>${esc(s.text)}</p><p>${esc(s.review!.note || "未填写备注")}</p></blockquote>`,
+        )
+        .join("");
       return `<section class="para"><h3>第 ${p.index + 1} 段 · ${formatPercent(p.score)}% · ${VERDICT_LABEL[p.verdict]}</h3><p>${body}</p>${notes}</section>`;
     })
     .join("");
