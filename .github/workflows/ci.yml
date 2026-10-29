@@ -21,6 +21,8 @@ jobs:
       # CPU 版 torch 比默认的 CUDA 版小得多；默认测试不加载模型权重。
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r requirements-dev.txt
+      - run: ruff format --check .
+      - run: ruff check .
       - run: python -m pytest -q
 
   frontend:

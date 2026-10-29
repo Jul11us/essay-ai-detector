@@ -1,2 +1,4 @@
 # 纯格式化提交，blame 时跳过：Prettier 重排版（frontend/）
 0bbd6559ede438f1849adcb47c2157b0889b80e1
+# 纯格式化提交：ruff format 重排版（backend/）
+15eda7a914778ebac441d45214b86af9d5378050

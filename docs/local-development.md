@@ -67,7 +67,8 @@ CPU 可选 ONNX INT8 路径：先安装 `backend/requirements-onnx.txt`，再运
 
 ## 代码格式
 
-前端用 Prettier（配置在 `frontend/.prettierrc.json`）。提交前运行 `npm --prefix frontend run format` 自动整理；CI 会运行 `format:check`，格式不对会失败。
+- 前端用 Prettier（配置在 `frontend/.prettierrc.json`）。提交前运行 `npm --prefix frontend run format` 自动整理；CI 会运行 `format:check`，格式不对会失败。
+- 后端用 Ruff（配置在 `backend/ruff.toml`，版本固定在 `requirements-dev.txt`）。在 `backend/` 下运行 `ruff format .` 自动整理，`ruff check .` 做基本检查（目前只开了 pyflakes：未使用的导入、未定义的名字）；CI 会运行 `ruff format --check .` 和 `ruff check .`。
 
 整体重排版的那个提交已记在 `.git-blame-ignore-revs`。GitHub 的 blame 会自动跳过它；本地想让 `git blame` 也跳过，执行一次：
 

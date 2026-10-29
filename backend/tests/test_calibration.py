@@ -7,7 +7,6 @@ from app.calibration_fit import (
     build_profile,
     document_verdict,
     fit_thresholds,
-    threshold_metrics,
     validate_split_groups,
     wilson_interval,
 )
