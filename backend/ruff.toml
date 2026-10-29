@@ -1,0 +1,12 @@
+# 后端 Python 的格式化和最基本的静态检查配置。行宽和前端 Prettier 一致（100）。
+line-length = 100
+target-version = "py311"
+extend-exclude = ["test-results"]
+
+[format]
+# 默认：双引号、空格缩进、保留“魔法尾逗号”。
+
+[lint]
+# 只开 pyflakes（F）：未使用的导入、未定义的名字。它在整理 benchmark.py 时抓到过一个
+# 真实的 undefined name。更多规则以后再单独讨论，别在格式化提交里混进去。
+select = ["F"]
