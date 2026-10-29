@@ -24,7 +24,7 @@ def measure_rhythm(text: str) -> dict:
         }
     mean = sum(shown) / len(shown)
     var = sum((n - mean) ** 2 for n in shown) / len(shown)
-    cv = 0.0 if mean == 0 else (var ** 0.5) / mean
+    cv = 0.0 if mean == 0 else (var**0.5) / mean
     if cv < 0.22:
         label = "起伏很小"
         note = (

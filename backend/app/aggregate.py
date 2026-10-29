@@ -49,8 +49,12 @@ def paragraph_verdict(score: float) -> str:
 
 
 def aggregate(
-    paragraphs: list[str], probs: list[float], lang: str,
-    *, low: float = LOW_SCORE, high: float = HIGH_SCORE,
+    paragraphs: list[str],
+    probs: list[float],
+    lang: str,
+    *,
+    low: float = LOW_SCORE,
+    high: float = HIGH_SCORE,
 ) -> AggregateResult:
     if len(paragraphs) != len(probs):
         raise ValueError("paragraphs and probs length mismatch")

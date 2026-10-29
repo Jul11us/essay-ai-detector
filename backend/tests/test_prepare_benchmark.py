@@ -1,4 +1,5 @@
 """Regression checks for provenance, full-answer preservation and split leakage."""
+
 import importlib.util
 import json
 from pathlib import Path
@@ -12,7 +13,11 @@ _SPEC.loader.exec_module(prepare)
 
 
 def source_rows(lang, count=12):
-    base = "完整的中文回答保持原稿措辞，解释具体原因和事实。" * 12 if lang == "zh" else "A complete source answer discusses this question in detail. " * 10
+    base = (
+        "完整的中文回答保持原稿措辞，解释具体原因和事实。" * 12
+        if lang == "zh"
+        else "A complete source answer discusses this question in detail. " * 10
+    )
     return [
         {
             "question": f"{lang} question {index}",
@@ -45,7 +50,9 @@ def test_complete_original_answers_and_constructed_mixed_are_preserved(tmp_path)
             first, second = [by_id[component["id"]] for component in row["components"]]
             assert row["split"] == first["split"] == second["split"] == "test"
             assert row["group_id"] == first["group_id"] == second["group_id"]
-            assert text == (tmp_path / first["file"]).read_bytes().decode("utf-8") + "\n\n" + (tmp_path / second["file"]).read_bytes().decode("utf-8")
+            assert text == (tmp_path / first["file"]).read_bytes().decode("utf-8") + "\n\n" + (
+                tmp_path / second["file"]
+            ).read_bytes().decode("utf-8")
     assert summary["counts"]["en:calibration:human"] == 4
     assert summary["counts"]["zh:test:mixed"] == 2
     before = manifest.read_bytes()
@@ -57,7 +64,11 @@ def test_duplicate_question_and_whitespace_variant_answer_never_leak_across_spli
     for lang, domain in (("en", "wiki_csai"), ("zh", "open_qa")):
         rows = source_rows(lang, 14)
         question_duplicate = dict(rows[0], question="  " + rows[0]["question"].replace(" ", "  "))
-        answer_duplicate = dict(rows[1], question="separate question", human_answers=[rows[1]["human_answers"][1].replace(" ", "  ")])
+        answer_duplicate = dict(
+            rows[1],
+            question="separate question",
+            human_answers=[rows[1]["human_answers"][1].replace(" ", "  ")],
+        )
         pool = prepare.candidates(rows + [question_duplicate, answer_duplicate], lang, domain, 7)
         pairs = prepare.choose_pairs({(lang, domain): pool}, 12, 7)
         assert len({p["group_id"] for p in pairs}) == len(pairs)
@@ -70,7 +81,11 @@ def test_checksum_mismatch_refuses_corrupted_cache_without_network(tmp_path, mon
     raw = tmp_path / "raw" / "en-wiki_csai.jsonl"
     raw.parent.mkdir()
     raw.write_bytes(b"corrupted")
-    monkeypatch.setattr(prepare.urllib.request, "urlopen", lambda *args, **kwargs: pytest.fail("must not download after a cached checksum failure"))
+    monkeypatch.setattr(
+        prepare.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: pytest.fail("must not download after a cached checksum failure"),
+    )
     with pytest.raises(ValueError, match="checksum mismatch"):
         prepare.fetch_source(tmp_path, "en", "wiki_csai")
 

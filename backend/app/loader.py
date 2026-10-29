@@ -51,7 +51,6 @@ def assert_clean_loading(loading: dict) -> None:
         )
 
 
-
 class ModelHub:
     def __init__(self) -> None:
         self.phase = "downloading"
@@ -215,7 +214,8 @@ class ModelHub:
             from modelscope.hub.snapshot_download import snapshot_download as ms_download
         except ImportError as exc:
             raise RuntimeError(
-                "中文模型下载失败：已尝试 " + "、".join(attempts)
+                "中文模型下载失败：已尝试 "
+                + "、".join(attempts)
                 + "；ModelScope 兜底也不可用，因为当前环境没装 modelscope"
                 "（pip install modelscope）。"
             ) from exc

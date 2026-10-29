@@ -2,6 +2,7 @@
 
 No paths are read, no models are loaded, and no runtime threshold is changed.
 """
+
 from __future__ import annotations
 
 import re
@@ -60,7 +61,12 @@ class Sample(BaseModel):
     def public_link(cls, value):
         if value is not None:
             parsed = urlsplit(value)
-            if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+            ):
                 raise ValueError("来源链接须是无登录信息的 HTTP(S) 地址")
         return value
 
@@ -115,7 +121,11 @@ def analyze_predictions(payload: AnalyzeRequest) -> dict:
         if record.get("input_sha256"):
             record["_sha256"] = record["input_sha256"]
     report = summarize(records, records)
-    report["evaluation_run"] = {"expected": expected, "completed": len(records), "incomplete": expected != len(records)}
+    report["evaluation_run"] = {
+        "expected": expected,
+        "completed": len(records),
+        "incomplete": expected != len(records),
+    }
     # Require exact identity, not a display name masquerading as a weight fingerprint.
     profile = None
     if all(r["split"] in {"calibration", "test"} for r in records):
@@ -130,5 +140,8 @@ def analyze_predictions(payload: AnalyzeRequest) -> dict:
                 entry["reasons"].extend(extra)
                 if entry["status"] == "validated":
                     entry["status"] = "candidate"
-    return {"report": report, "calibration": profile,
-            "note": "根据提供的标签、来源和预测重新汇总；导入记录的真值和模型来源仍需人工核验。查看、拟合或导出不会自动启用阈值。"}
+    return {
+        "report": report,
+        "calibration": profile,
+        "note": "根据提供的标签、来源和预测重新汇总；导入记录的真值和模型来源仍需人工核验。查看、拟合或导出不会自动启用阈值。",
+    }

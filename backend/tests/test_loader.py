@@ -13,9 +13,7 @@ from app.loader import ModelHub, assert_clean_loading
 
 
 def test_clean_loading_passes():
-    assert_clean_loading(
-        {"missing_keys": [], "unexpected_keys": [], "mismatched_keys": []}
-    )
+    assert_clean_loading({"missing_keys": [], "unexpected_keys": [], "mismatched_keys": []})
 
 
 def test_missing_keys_are_fatal():

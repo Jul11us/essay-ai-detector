@@ -18,7 +18,12 @@ def test_app_imports_with_nothing_but_the_app_package(tmp_path):
         ignore=shutil.ignore_patterns("__pycache__"),
     )
     out = subprocess.run(
-        [sys.executable, "-I", "-c", "import sys; sys.path.insert(0, '.'); import app.main; print('ok')"],
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "import sys; sys.path.insert(0, '.'); import app.main; print('ok')",
+        ],
         cwd=tmp_path,
         env={"DETECTOR_SKIP_LOAD": "1", "PATH": "/usr/bin:/bin"},
         capture_output=True,

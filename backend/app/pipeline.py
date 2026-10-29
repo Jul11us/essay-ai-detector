@@ -60,11 +60,17 @@ def run_detect(
         raise DetectError("infer_failed") from exc
     model_id = MODEL_IDS[lang]
     calibration = resolve_calibration(
-        lang, model_id, model_revision, count_chars("".join(parts)), scope=calibration_scope,
+        lang,
+        model_id,
+        model_revision,
+        count_chars("".join(parts)),
+        scope=calibration_scope,
     )
     agg = aggregate(parts, probs, lang, low=calibration["low"], high=calibration["high"])
     outlook = review_outlook(agg)
-    threshold_basis = basis(model_id, lang, low_score=calibration["low"], high_score=calibration["high"])
+    threshold_basis = basis(
+        model_id, lang, low_score=calibration["low"], high_score=calibration["high"]
+    )
     return {
         "score": agg.score,
         "verdict": agg.verdict,

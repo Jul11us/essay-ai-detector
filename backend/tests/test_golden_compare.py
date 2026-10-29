@@ -61,7 +61,5 @@ def test_booleans_are_compared_as_values_not_numbers():
 
 
 def test_verdict_change_is_caught():
-    diffs = compare(
-        {"en_essay": {"verdict": "low"}}, {"en_essay": {"verdict": "uncertain"}}
-    )
+    diffs = compare({"en_essay": {"verdict": "low"}}, {"en_essay": {"verdict": "uncertain"}})
     assert diffs and "verdict" in diffs[0]

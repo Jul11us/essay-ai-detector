@@ -1,4 +1,5 @@
 """Bind evaluated thresholds to the bytes and recipe actually used for inference."""
+
 from pathlib import Path
 
 import pytest
@@ -12,10 +13,20 @@ def test_missing_local_weights_have_no_revision(tmp_path: Path):
     assert model_identity.model_revision(tmp_path, "onnx-int8") is None
 
 
-@pytest.mark.parametrize("filename", [
-    "model.safetensors", "config.json", "tokenizer.json", "tokenizer_config.json",
-    "vocab.txt", "special_tokens_map.json", "vocab.json", "merges.txt", "tokenizer.model",
-])
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "model.safetensors",
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.txt",
+        "special_tokens_map.json",
+        "vocab.json",
+        "merges.txt",
+        "tokenizer.model",
+    ],
+)
 def test_weight_and_tokenizer_changes_invalidate_revision(tmp_path: Path, filename: str):
     (tmp_path / "model.safetensors").write_bytes(b"synthetic weights")
     target = tmp_path / filename
@@ -37,7 +48,10 @@ def test_inference_recipe_version_invalidates_revision(tmp_path: Path, monkeypat
 def test_selected_runtime_and_precision_have_distinct_revisions(tmp_path: Path):
     for filename in ("model.safetensors", "model.onnx", "model.int8.onnx"):
         (tmp_path / filename).write_bytes(b"same synthetic byte fixture")
-    revisions = {model_identity.model_revision(tmp_path, runtime) for runtime in ("pytorch", "onnx", "onnx-int8")}
+    revisions = {
+        model_identity.model_revision(tmp_path, runtime)
+        for runtime in ("pytorch", "onnx", "onnx-int8")
+    }
     assert len(revisions) == 3
     assert None not in revisions
 

@@ -1,4 +1,5 @@
 """Render the current result snapshot as an editable, annotated Word report."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -28,7 +29,10 @@ class ReportModel(BaseModel):
     def xml_text(self):
         for value in self.__dict__.values():
             if isinstance(value, str) and any(
-                ord(ch) < 32 and ch not in "\t\r\n" or 0xD800 <= ord(ch) <= 0xDFFF or ord(ch) in {0xFFFE, 0xFFFF}
+                ord(ch) < 32
+                and ch not in "\t\r\n"
+                or 0xD800 <= ord(ch) <= 0xDFFF
+                or ord(ch) in {0xFFFE, 0xFFFF}
                 for ch in value
             ):
                 raise ValueError("文字中包含 Word 无法显示的控制字符")
@@ -110,10 +114,17 @@ class LanguageReport(ReportModel):
     def bounded_text(self):
         if len({p.index for p in self.paragraphs}) != len(self.paragraphs):
             raise ValueError("段落编号不能重复")
-        total = sum(len(p.text or p.excerpt) + sum(len(s.text) for s in p.sentences or []) for p in self.paragraphs)
+        total = sum(
+            len(p.text or p.excerpt) + sum(len(s.text) for s in p.sentences or [])
+            for p in self.paragraphs
+        )
         total += sum(len(i.text) for i in self.ignored)
-        total += sum(len(i.text) for i in self.detection_scope.excluded) if self.detection_scope else 0
-        total += sum(len(s.review.note) for p in self.paragraphs for s in p.sentences or [] if s.review)
+        total += (
+            sum(len(i.text) for i in self.detection_scope.excluded) if self.detection_scope else 0
+        )
+        total += sum(
+            len(s.review.note) for p in self.paragraphs for s in p.sentences or [] if s.review
+        )
         if total > 500_000:
             raise ValueError("报告正文过长，请分开导出")
         return self
@@ -152,7 +163,7 @@ def _shade(run, color: str):
 
 
 def _sentence_band(score: float) -> str:
-    return "low" if score < .4 else "high" if score >= .75 else "uncertain"
+    return "low" if score < 0.4 else "high" if score >= 0.75 else "uncertain"
 
 
 def _annotated(doc, paragraph: Paragraph):
@@ -165,7 +176,13 @@ def _annotated(doc, paragraph: Paragraph):
             text_parts = []
             break
         text_parts.append((body[cursor:start], None, None))
-        text_parts.append((sentence.text, _sentence_band(sentence.score) if sentence.score is not None else None, sentence.review))
+        text_parts.append(
+            (
+                sentence.text,
+                _sentence_band(sentence.score) if sentence.score is not None else None,
+                sentence.review,
+            )
+        )
         cursor = start + len(sentence.text)
     rendered = doc.add_paragraph()
     if text_parts:
@@ -181,7 +198,9 @@ def _annotated(doc, paragraph: Paragraph):
             doc.add_paragraph("部分句子未评分，未评分文字不着色。", style="Caption")
     else:
         rendered.add_run(body)
-        doc.add_paragraph("未完成可对应原文的逐句评分；本段仅展示整段分数，正文不着色。", style="Caption")
+        doc.add_paragraph(
+            "未完成可对应原文的逐句评分；本段仅展示整段分数，正文不着色。", style="Caption"
+        )
     if paragraph.sentenceNote:
         doc.add_paragraph(paragraph.sentenceNote, style="Caption")
 
@@ -190,7 +209,9 @@ def _scope_section(doc, scope: DetectionScope | None):
     if scope is None:
         return
     doc.add_heading("实际检测范围", level=2)
-    doc.add_paragraph(f"文件：{scope.source_name}\n选中 {scope.selected_blocks} / {scope.total_blocks} 个提取段落，{scope.selected_chars} / {scope.total_chars} 个非空白字符。")
+    doc.add_paragraph(
+        f"文件：{scope.source_name}\n选中 {scope.selected_blocks} / {scope.total_blocks} 个提取段落，{scope.selected_chars} / {scope.total_chars} 个非空白字符。"
+    )
     doc.add_paragraph(scope.note, style="Caption")
     if scope.excluded:
         doc.add_heading("用户排除的文字", level=3)
@@ -202,16 +223,23 @@ def _scope_section(doc, scope: DetectionScope | None):
 def _language_section(doc, result: LanguageReport):
     doc.add_heading("中文部分" if result.lang == "zh" else "英文部分", level=1)
     summary = doc.add_paragraph()
-    lead = summary.add_run(f"AI 倾向分数（模型原始分数） {result.score:.1%} · {VERDICT[result.verdict]}\n")
+    lead = summary.add_run(
+        f"AI 倾向分数（模型原始分数） {result.score:.1%} · {VERDICT[result.verdict]}\n"
+    )
     lead.bold = True
     lead.font.size = Pt(16)
-    summary.add_run(f"文本充分度：{CONFIDENCE[result.confidence]} · 非空白字符 {result.char_count} · 词数 {result.word_count}")
+    summary.add_run(
+        f"文本充分度：{CONFIDENCE[result.confidence]} · 非空白字符 {result.char_count} · 词数 {result.word_count}"
+    )
     doc.add_paragraph("文本充分度反映长度及各段一致性，不是判断正确的概率。")
     legend = doc.add_paragraph("句子颜色：")
     for band in ("low", "uncertain", "high"):
         run = legend.add_run(f" {VERDICT[band]} ")
         _shade(run, SHADE[band])
-    doc.add_paragraph("句子颜色按默认 40%／75% 展示门槛；段落和句子未经过整篇样本校准。颜色不表示已确定作者来源。", style="Caption")
+    doc.add_paragraph(
+        "句子颜色按默认 40%／75% 展示门槛；段落和句子未经过整篇样本校准。颜色不表示已确定作者来源。",
+        style="Caption",
+    )
     table = doc.add_table(rows=1, cols=3)
     table.style = "Light Shading Accent 1"
     for cell, label in zip(table.rows[0].cells, ("段落", "模型分数", "档位")):
@@ -226,23 +254,41 @@ def _language_section(doc, result: LanguageReport):
     table.rows[0]._tr.get_or_add_trPr().append(repeat)
     for paragraph in result.paragraphs:
         cells = table.add_row().cells
-        for cell, value in zip(cells, (f"第 {paragraph.index + 1} 段", f"{paragraph.score:.1%}", VERDICT[paragraph.verdict])):
+        for cell, value in zip(
+            cells,
+            (f"第 {paragraph.index + 1} 段", f"{paragraph.score:.1%}", VERDICT[paragraph.verdict]),
+        ):
             cell.text = value
     doc.add_heading("原文与逐句标注", level=2)
     for paragraph in result.paragraphs:
-        doc.add_heading(f"第 {paragraph.index + 1} 段 · {paragraph.score:.1%} · {VERDICT[paragraph.verdict]}", level=3)
+        doc.add_heading(
+            f"第 {paragraph.index + 1} 段 · {paragraph.score:.1%} · {VERDICT[paragraph.verdict]}",
+            level=3,
+        )
         _annotated(doc, paragraph)
-    reviews = [(p.index, i, s) for p in result.paragraphs for i, s in enumerate(p.sentences or []) if s.review and s.text and s.text in (p.text or p.excerpt)]
+    reviews = [
+        (p.index, i, s)
+        for p in result.paragraphs
+        for i, s in enumerate(p.sentences or [])
+        if s.review and s.text and s.text in (p.text or p.excerpt)
+    ]
     if reviews:
         doc.add_heading("人工复核记录", level=2)
-        doc.add_paragraph("人工备注独立于模型分数；原句上的批注可在 Word 的审阅面板中打开。", style="Caption")
+        doc.add_paragraph(
+            "人工备注独立于模型分数；原句上的批注可在 Word 的审阅面板中打开。", style="Caption"
+        )
         for pi, si, sentence in reviews:
-            doc.add_heading(f"第 {pi + 1} 段第 {si + 1} 句 · {REVIEW[sentence.review.state]}", level=3)
+            doc.add_heading(
+                f"第 {pi + 1} 段第 {si + 1} 句 · {REVIEW[sentence.review.state]}", level=3
+            )
             doc.add_paragraph(sentence.text)
             doc.add_paragraph(sentence.review.note or "未填写备注")
     if result.ignored:
         doc.add_heading("未参与评分的文字", level=2)
-        doc.add_paragraph("以下内容保留在报告中，不计入模型评分。原文件版式、图片和脚注未随此结果快照导出。", style="Caption")
+        doc.add_paragraph(
+            "以下内容保留在报告中，不计入模型评分。原文件版式、图片和脚注未随此结果快照导出。",
+            style="Caption",
+        )
         for item in result.ignored:
             doc.add_paragraph(item.reason, style="Heading 3")
             doc.add_paragraph(item.text)
@@ -251,7 +297,9 @@ def _language_section(doc, result: LanguageReport):
     doc.add_paragraph(f"权重版本：{result.model_revision or '未记录'}", style="Caption")
     if result.calibration:
         info = result.calibration
-        doc.add_paragraph(f"整篇阈值：{'当前结果使用样本验证门槛' if info.applied else '沿用默认门槛'}（{info.low:.1%}／{info.high:.1%}）。")
+        doc.add_paragraph(
+            f"整篇阈值：{'当前结果使用样本验证门槛' if info.applied else '沿用默认门槛'}（{info.low:.1%}／{info.high:.1%}）。"
+        )
         doc.add_paragraph(info.note)
     else:
         doc.add_paragraph("整篇阈值未记录校准证据；分数仍是模型原始信号。")
@@ -292,7 +340,9 @@ def build_word_report(result: LanguageReport | BilingualReport) -> bytes:
     doc.core_properties.title = "本机作文模型检测报告"
     doc.core_properties.author = "Essay AI Detector"
     doc.add_heading("作文模型检测报告", level=0)
-    doc.add_paragraph(datetime.now(timezone.utc).strftime("导出时间：%Y-%m-%d %H:%M UTC"), style="Subtitle")
+    doc.add_paragraph(
+        datetime.now(timezone.utc).strftime("导出时间：%Y-%m-%d %H:%M UTC"), style="Subtitle"
+    )
     doc.add_paragraph(DISCLAIMER)
     _scope_section(doc, result.detection_scope)
     if isinstance(result, BilingualReport):
@@ -305,7 +355,9 @@ def build_word_report(result: LanguageReport | BilingualReport) -> bytes:
                 _language_section(doc, part)
             else:
                 doc.add_heading(label, level=1)
-                doc.add_paragraph(part.message if isinstance(part, SectionError) else "该语言没有可评分正文。")
+                doc.add_paragraph(
+                    part.message if isinstance(part, SectionError) else "该语言没有可评分正文。"
+                )
     else:
         _language_section(doc, result)
     footer = section.footer.paragraphs[0]
