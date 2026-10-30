@@ -21,8 +21,11 @@ jobs:
       # CPU 版 torch 比默认的 CUDA 版小得多；默认测试不加载模型权重。
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r requirements-dev.txt
-      - run: ruff format --check .
-      - run: ruff check .
+      # 全仓库 Python 共用根目录的 ruff.toml，所以从仓库根目录检查三个目录。
+      - run: ruff format --check backend scripts experiments
+        working-directory: .
+      - run: ruff check backend scripts experiments
+        working-directory: .
       - run: python -m pytest -q
 
   frontend:

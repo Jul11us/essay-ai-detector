@@ -2,3 +2,5 @@
 0bbd6559ede438f1849adcb47c2157b0889b80e1
 # 纯格式化提交：ruff format 重排版（backend/）
 15eda7a914778ebac441d45214b86af9d5378050
+# 纯格式化提交：ruff format 重排版（scripts/、experiments/）
+8d4fd0f71049fefc3fcdc49c134c1280ddb9efbe
