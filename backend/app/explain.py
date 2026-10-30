@@ -12,7 +12,9 @@ class ReviewOutlook:
     detail: str
 
 
-def basis(model_id: str, lang: str, *, low_score: float = LOW_SCORE, high_score: float = HIGH_SCORE) -> str:
+def basis(
+    model_id: str, lang: str, *, low_score: float = LOW_SCORE, high_score: float = HIGH_SCORE
+) -> str:
     if lang == "zh":
         engine = (
             f"中文用开源模型 {model_id}。它把每一段映射成 0–100% 的模型原始分数，"

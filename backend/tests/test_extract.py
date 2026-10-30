@@ -139,8 +139,7 @@ def _text_pdf(message: str) -> bytes:
     for offset in offsets[1:]:
         out += f"{offset:010d} 00000 n \n".encode()
     out += (
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
-        f"startxref\n{xref}\n%%EOF\n"
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
     ).encode()
     return bytes(out)
 
@@ -211,9 +210,9 @@ def test_pdf_hyphen_and_cjk_joins():
     wide = "这一行中文写满了整行版心宽度用来测试拼接是否不插入多余的空格啊"
     assert pdf_paragraphs([f"{wide}\n{wide}\n结束。"]) == [wide + wide + "结束。"]
     en = "The model was trained on a wide range of essays and it was evalu-"
-    assert pdf_paragraphs([f"{en}\nated carefully on a held out set of student writing ok\nDone."])[0].startswith(
-        en[:-1] + "ated"
-    )
+    assert pdf_paragraphs([f"{en}\nated carefully on a held out set of student writing ok\nDone."])[
+        0
+    ].startswith(en[:-1] + "ated")
 
 
 def test_pdf_heading_is_its_own_paragraph():
@@ -238,7 +237,10 @@ def _docx_with_padding(entries: int = 0, padding_bytes: int = 0) -> bytes:
     doc.add_paragraph("A normal essay paragraph that should be readable.")
     src = _docx_bytes(doc)
     out = BytesIO()
-    with zipfile.ZipFile(BytesIO(src)) as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+    with (
+        zipfile.ZipFile(BytesIO(src)) as zin,
+        zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout,
+    ):
         for info in zin.infolist():
             zout.writestr(info, zin.read(info.filename))
         if padding_bytes:
@@ -313,6 +315,7 @@ def test_limit_messages_quote_the_real_limits():
     from app import extract
 
     assert f"{extract.MAX_PDF_PAGES} 页" in DetectError("too_many_pages").message
-    assert f"{extract.MAX_DOCX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB" in DetectError(
-        "archive_too_large"
-    ).message
+    assert (
+        f"{extract.MAX_DOCX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB"
+        in DetectError("archive_too_large").message
+    )

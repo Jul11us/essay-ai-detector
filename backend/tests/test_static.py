@@ -58,7 +58,11 @@ def test_real_app_serves_the_frontend_when_the_env_var_is_set(tmp_path, monkeypa
     )
     out = subprocess.run(
         [sys.executable, "-c", code],
-        env={**__import__("os").environ, "DETECTOR_STATIC_DIR": str(tmp_path), "DETECTOR_SKIP_LOAD": "1"},
+        env={
+            **__import__("os").environ,
+            "DETECTOR_STATIC_DIR": str(tmp_path),
+            "DETECTOR_SKIP_LOAD": "1",
+        },
         capture_output=True,
         text=True,
         cwd=__import__("pathlib").Path(__file__).resolve().parents[1],

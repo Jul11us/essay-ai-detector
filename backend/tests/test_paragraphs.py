@@ -30,17 +30,23 @@ def test_single_long_block_splits_on_newlines():
     assert len(parts) >= 2
 
 
-
 def test_scoring_text_excludes_front_matter_and_references():
     from app.paragraphs import prepare_scoring_text
 
     body = "The observations in this essay are grounded in a specific library visit. " * 5
-    text = "A library afternoon\n\nCourse reflection\n\n" + body + "\n\nReferences\n\nSmith, J. Example."
+    text = (
+        "A library afternoon\n\nCourse reflection\n\n"
+        + body
+        + "\n\nReferences\n\nSmith, J. Example."
+    )
     scored, natural, ignored = prepare_scoring_text(text)
     assert scored == body.strip()
     assert natural is None
     assert [item["reason"] for item in ignored] == [
-        "标题或副标题", "标题或副标题", "参考文献", "参考文献",
+        "标题或副标题",
+        "标题或副标题",
+        "参考文献",
+        "参考文献",
     ]
 
 
@@ -54,7 +60,6 @@ def test_short_blocks_are_reported_as_excluded():
     assert ignored == [{"text": "Title", "reason": "标题或副标题"}]
 
 
-
 def test_windows_crlf_does_not_fold_headings_into_body():
     from app.paragraphs import prepare_scoring_text
 
@@ -63,9 +68,10 @@ def test_windows_crlf_does_not_fold_headings_into_body():
     scored, _, ignored = prepare_scoring_text(raw)
     assert scored == body.strip()
     assert [item["reason"] for item in ignored] == [
-        "标题或副标题", "参考文献", "参考文献",
+        "标题或副标题",
+        "参考文献",
+        "参考文献",
     ]
-
 
 
 def test_reference_heading_on_single_newline_still_excludes_tail():

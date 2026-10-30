@@ -32,7 +32,15 @@ const s = (score: number | null, text = "abcdefghij"): SentenceHit => ({
 });
 
 function para(index: number, score: number, sentences?: SentenceHit[] | null): ParagraphHit {
-  return { index, excerpt: `p${index}`, text: `p${index}`, score, verdict: "low", char_count: 100, sentences };
+  return {
+    index,
+    excerpt: `p${index}`,
+    text: `p${index}`,
+    score,
+    verdict: "low",
+    char_count: 100,
+    sentences,
+  };
 }
 
 function unit(band: Unit["band"], i: number, weight = 10): Unit {

@@ -8,13 +8,7 @@ import {
   type Outcome,
   type Side,
 } from "./aggregate";
-import {
-  detect,
-  detectSentences,
-  fetchExplain,
-  isDetectErr,
-  type SentenceScan,
-} from "./api";
+import { detect, detectSentences, fetchExplain, isDetectErr, type SentenceScan } from "./api";
 import { canSubmit, formatResult } from "./copy";
 import type { DetectOk, Lang, SentenceReview } from "./types";
 import { keepReviews } from "./reviews";
@@ -44,7 +38,11 @@ function applyScan(
     if ((p.text || p.excerpt) !== sentText) return p;
     if (typeof data === "string") return { ...p, sentences: [], sentenceNote: data };
     if (isDetectErr(data)) return { ...p, sentences: [], sentenceNote: data.message };
-    return { ...p, sentences: keepReviews(p.sentences || [], data.sentences), sentenceNote: data.note || undefined };
+    return {
+      ...p,
+      sentences: keepReviews(p.sentences || [], data.sentences),
+      sentenceNote: data.note || undefined,
+    };
   });
 }
 
@@ -98,7 +96,8 @@ export function useDetector() {
     const epoch = scanToken;
     if (!epoch || !snapshot || scanEpoch.current !== epoch) return;
     let cancelled = false;
-    const jobs: { side: Side; lang: "zh" | "en"; index: number; text: string; score: number }[] = [];
+    const jobs: { side: Side; lang: "zh" | "en"; index: number; text: string; score: number }[] =
+      [];
     const collect = (doc: DetectOk, side: Side) => {
       for (const para of paragraphsToScan(doc)) {
         jobs.push({
@@ -155,7 +154,6 @@ export function useDetector() {
 
   /** 输入变了：清空当前结果，掐掉还在跑的逐句任务。任务记录保留版本历史。 */
   function reset() {
-
     scanEpoch.current = 0;
     scanAbort.current?.abort();
     setResult(null);
@@ -204,7 +202,15 @@ export function useDetector() {
     }, DETECT_TIMEOUT_MS);
     try {
       const data = await detect(
-        { lang, text, file, en: enText, zh: zhText, selection: input.selection, source_sha256: input.source_sha256 },
+        {
+          lang,
+          text,
+          file,
+          en: enText,
+          zh: zhText,
+          selection: input.selection,
+          source_sha256: input.source_sha256,
+        },
         ctrl.signal,
       );
       if (mine !== gen.current) return;
@@ -257,7 +263,11 @@ export function useDetector() {
       if (isDetectErr(data) || isBilingual(data)) {
         return isDetectErr(data) ? data.message : "这一段没有返回分数。";
       }
-      if (data.model_id !== doc.model_id || (doc.model_revision && data.model_revision && doc.model_revision !== data.model_revision)) return "检测模型版本已变化，请重新检测整篇，再继续修改与对比。当前结果已保留。";
+      if (
+        data.model_id !== doc.model_id ||
+        (doc.model_revision && data.model_revision && doc.model_revision !== data.model_revision)
+      )
+        return "检测模型版本已变化，请重新检测整篇，再继续修改与对比。当前结果已保留。";
       let next = replaceParagraph(doc, index, data);
       try {
         const explained = await fetchExplain({
@@ -275,9 +285,19 @@ export function useDetector() {
       setResult((cur) => {
         if (!cur) return cur;
         // 重测期间整篇逐句打分还在跑，其它段可能刚拿到句子分数；别用发请求时的旧快照盖掉。
-        if (side === "single" && !isBilingual(cur)) return recordRecheck(cur, carrySentences(cur, merged), `第 ${index + 1} 段重测`);
+        if (side === "single" && !isBilingual(cur))
+          return recordRecheck(cur, carrySentences(cur, merged), `第 ${index + 1} 段重测`);
         const part = isBilingual(cur) && side !== "single" ? cur[side] : null;
-        if (part && !isSectionErr(part)) return recordRecheck(cur, { ...cur, [side]: carrySentences(part, merged), detection_scope: merged.detection_scope ?? cur.detection_scope }, `${side === "en" ? "英文" : "中文"}第 ${index + 1} 段重测`);
+        if (part && !isSectionErr(part))
+          return recordRecheck(
+            cur,
+            {
+              ...cur,
+              [side]: carrySentences(part, merged),
+              detection_scope: merged.detection_scope ?? cur.detection_scope,
+            },
+            `${side === "en" ? "英文" : "中文"}第 ${index + 1} 段重测`,
+          );
         return cur;
       });
       // 改过的这一段自动重新逐句打分，不用再点「定位」。
@@ -319,24 +339,68 @@ export function useDetector() {
   }
 
   function saveVersion(label = "手动保存") {
-    setResult((cur) => cur ? appendVersion(ensureVersions(cur), label.trim().slice(0,80) || "手动保存", "manual", true) : cur);
+    setResult((cur) =>
+      cur
+        ? appendVersion(
+            ensureVersions(cur),
+            label.trim().slice(0, 80) || "手动保存",
+            "manual",
+            true,
+          )
+        : cur,
+    );
   }
   function restoreVersion(id: string) {
-    ++gen.current; scanEpoch.current = 0; scanAbort.current?.abort(); setScanProgress(null);
+    ++gen.current;
+    scanEpoch.current = 0;
+    scanAbort.current?.abort();
+    setScanProgress(null);
     setResult((cur) => {
       const version = cur?.version_history?.find((entry) => entry.id === id);
       if (!cur || !version) return cur;
       const saved = appendVersion(cur, "恢复前的复核记录", "manual", false, "checkpoint");
       const restored = deferUnscanned(clone(version.result));
-      return appendVersion({ ...restored, version_history: saved.version_history, writing_process: saved.writing_process }, `恢复自 ${version.label}`, "restore", true);
+      return appendVersion(
+        {
+          ...restored,
+          version_history: saved.version_history,
+          writing_process: saved.writing_process,
+        },
+        `恢复自 ${version.label}`,
+        "restore",
+        true,
+      );
     });
   }
 
-  function reviewSentence(side: Side, paraIndex: number, sentenceIndex: number, expectedText: string, review: SentenceReview | null) {
-    setResult((cur) => cur ? recordReview(cur, mapParagraph(cur, side, paraIndex, (para) => {
-      if (para.sentences?.[sentenceIndex]?.text !== expectedText) return para;
-      return { ...para, sentences: para.sentences.map((sentence, i) => i === sentenceIndex ? { ...sentence, review: review ?? undefined } : sentence) };
-    }), side, paraIndex, sentenceIndex, expectedText, review) : cur);
+  function reviewSentence(
+    side: Side,
+    paraIndex: number,
+    sentenceIndex: number,
+    expectedText: string,
+    review: SentenceReview | null,
+  ) {
+    setResult((cur) =>
+      cur
+        ? recordReview(
+            cur,
+            mapParagraph(cur, side, paraIndex, (para) => {
+              if (para.sentences?.[sentenceIndex]?.text !== expectedText) return para;
+              return {
+                ...para,
+                sentences: para.sentences.map((sentence, i) =>
+                  i === sentenceIndex ? { ...sentence, review: review ?? undefined } : sentence,
+                ),
+              };
+            }),
+            side,
+            paraIndex,
+            sentenceIndex,
+            expectedText,
+            review,
+          )
+        : cur,
+    );
   }
 
   return {

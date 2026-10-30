@@ -53,9 +53,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # 后加的中间件在外层：先数请求体字节，再谈 CORS 和路由。
-app.add_middleware(
-    BodyLimitMiddleware, limit=MAX_UPLOAD_BYTES, multipart_slack=_MULTIPART_SLACK
-)
+app.add_middleware(BodyLimitMiddleware, limit=MAX_UPLOAD_BYTES, multipart_slack=_MULTIPART_SLACK)
 
 
 # 多久查一次客户端是否已断开（点了取消、超时、关了标签页）。
@@ -96,9 +94,7 @@ async def run_until_disconnect(request: Request, fn, *args):
 
     watcher = asyncio.create_task(watch())
     try:
-        return await asyncio.to_thread(
-            gated, fn, cancel, *args
-        )
+        return await asyncio.to_thread(gated, fn, cancel, *args)
     finally:
         watcher.cancel()
 
@@ -136,15 +132,28 @@ async def detect_error_handler(request, exc: DetectError):
     )
 
 
-def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=None, fingerprint=None):
+def _detect_document(
+    cancel, lang, text, filename, file_bytes, floor, selection=None, fingerprint=None
+):
     score = cancellable(hub.score, cancel)
     extracted, coverage = None, None
     if file_bytes is not None:
-        extracted, coverage = scoped_document(extract_from_bytes(filename or "upload.bin", file_bytes), filename or "upload.bin", file_bytes, selection, fingerprint)
+        extracted, coverage = scoped_document(
+            extract_from_bytes(filename or "upload.bin", file_bytes),
+            filename or "upload.bin",
+            file_bytes,
+            selection,
+            fingerprint,
+        )
     elif selection is not None:
         raise DetectError("invalid_selection")
     result = run_detect(
-        lang, text, filename, file_bytes, score, length_floor=floor,
+        lang,
+        text,
+        filename,
+        file_bytes,
+        score,
+        length_floor=floor,
         model_revision=hub.revisions.get(lang),
         calibration_scope="paragraph" if floor is not None else "document",
         extracted_override=extracted,
@@ -157,11 +166,25 @@ def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=
 def _bilingual(cancel, text, en, zh, filename, file_bytes, selection=None, fingerprint=None):
     coverage = None
     if file_bytes is not None:
-        extracted, coverage = scoped_document(extract_from_bytes(filename or "upload.bin", file_bytes), filename or "upload.bin", file_bytes, selection, fingerprint)
+        extracted, coverage = scoped_document(
+            extract_from_bytes(filename or "upload.bin", file_bytes),
+            filename or "upload.bin",
+            file_bytes,
+            selection,
+            fingerprint,
+        )
         text, en, zh, file_bytes = extracted.text, None, None, None
     elif selection is not None:
         raise DetectError("invalid_selection")
-    result = run_bilingual(text, en, zh, filename, file_bytes, cancellable(hub.score, cancel), model_revisions=hub.revisions)
+    result = run_bilingual(
+        text,
+        en,
+        zh,
+        filename,
+        file_bytes,
+        cancellable(hub.score, cancel),
+        model_revisions=hub.revisions,
+    )
     if coverage is not None:
         result["detection_scope"] = coverage
         for side in ("en", "zh"):
@@ -307,10 +330,22 @@ async def word_report(request: Request):
     try:
         payload = WordRequest.model_validate(await _json_object(request))
     except ValidationError:
-        return JSONResponse({"error": "invalid_report", "message": "报告内容不完整或格式不正确，请重新检测后导出。"}, status_code=400)
+        return JSONResponse(
+            {
+                "error": "invalid_report",
+                "message": "报告内容不完整或格式不正确，请重新检测后导出。",
+            },
+            status_code=400,
+        )
     content = await asyncio.to_thread(build_word_report, payload.result)
-    return Response(content, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    headers={"Content-Disposition": 'attachment; filename="ai-writing-report.docx"', "Cache-Control": "no-store"})
+    return Response(
+        content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": 'attachment; filename="ai-writing-report.docx"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.post("/api/evaluation/manifest")
@@ -319,7 +354,13 @@ async def evaluation_manifest(request: Request):
         payload = ManifestRequest.model_validate(await _json_object(request))
         samples = validate_samples(payload.samples)
     except ValidationError:
-        return JSONResponse({"error": "invalid_manifest", "message": "样本清单格式不正确：检查编号、文件名、中英语言、human/ai/mixed 标签和来源字段。每批最多 1000 份。"}, status_code=400)
+        return JSONResponse(
+            {
+                "error": "invalid_manifest",
+                "message": "样本清单格式不正确：检查编号、文件名、中英语言、human/ai/mixed 标签和来源字段。每批最多 1000 份。",
+            },
+            status_code=400,
+        )
     except ValueError as exc:
         return JSONResponse({"error": "invalid_manifest", "message": str(exc)}, status_code=400)
     return {"samples": samples}
@@ -331,9 +372,21 @@ async def evaluation_analyze(request: Request):
         payload = AnalyzeRequest.model_validate(await _json_object(request))
         result = await asyncio.to_thread(analyze_predictions, payload)
     except ValidationError:
-        return JSONResponse({"error": "invalid_evaluation", "message": "评测记录格式不正确：检查标签、0–1 分数、判定档位、来源和模型版本。每批最多 1000 份。"}, status_code=400)
+        return JSONResponse(
+            {
+                "error": "invalid_evaluation",
+                "message": "评测记录格式不正确：检查标签、0–1 分数、判定档位、来源和模型版本。每批最多 1000 份。",
+            },
+            status_code=400,
+        )
     except ValueError:
-        return JSONResponse({"error": "invalid_evaluation", "message": "评测记录存在重复样本、校准/测试组泄漏或模型版本不一致，请核对清单后重新导入。"}, status_code=400)
+        return JSONResponse(
+            {
+                "error": "invalid_evaluation",
+                "message": "评测记录存在重复样本、校准/测试组泄漏或模型版本不一致，请核对清单后重新导入。",
+            },
+            status_code=400,
+        )
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
