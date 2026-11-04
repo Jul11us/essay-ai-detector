@@ -33,6 +33,7 @@ def batch_size_for(width: int) -> int:
         return _BATCH_CAP
     return max(1, min(_BATCH_CAP, _BATCH_SQ_BUDGET // (width * width)))
 
+
 _AI_MARKERS = ("ai", "generated", "machine", "fake", "机器", "生成", "伪造")
 _HUMAN_MARKERS = ("human", "real", "original", "人类", "真人", "人写")
 _GENERIC_LABEL = re.compile(r"^label[_-]?\d+$", re.I)

@@ -2,8 +2,21 @@ export type Lang = "zh" | "en" | "bi";
 export type ScoreLang = "zh" | "en";
 export type Verdict = "low" | "uncertain" | "high";
 export type Confidence = "low" | "medium" | "high";
-export type SentenceReview = { state: "reviewed" | "pending" | "revise"; note: string; updated_at: string };
-export type DetectionScope = { source_name: string; source_sha256: string; total_blocks: number; selected_blocks: number; total_chars: number; selected_chars: number; excluded: { text: string; reason: string }[]; note: string };
+export type SentenceReview = {
+  state: "reviewed" | "pending" | "revise";
+  note: string;
+  updated_at: string;
+};
+export type DetectionScope = {
+  source_name: string;
+  source_sha256: string;
+  total_blocks: number;
+  selected_blocks: number;
+  total_chars: number;
+  selected_chars: number;
+  excluded: { text: string; reason: string }[];
+  note: string;
+};
 
 export type SentenceHit = {
   review?: SentenceReview;
@@ -75,8 +88,15 @@ export type CalibrationInfo = {
   note: string;
   profile_version?: string;
   dataset_fingerprint?: string;
-  counts?: { calibration?: { human: number; ai: number; mixed: number }; test?: { human: number; ai: number; mixed: number } };
-  applicability?: { char_count?: { min: number; max: number }; source_domains?: string[]; writer_groups?: string[] };
+  counts?: {
+    calibration?: { human: number; ai: number; mixed: number };
+    test?: { human: number; ai: number; mixed: number };
+  };
+  applicability?: {
+    char_count?: { min: number; max: number };
+    source_domains?: string[];
+    writer_groups?: string[];
+  };
 };
 
 export type SectionErr = { error: string; message: string };
@@ -92,15 +112,42 @@ export type BilingualOk = {
   zh: DetectOk | SectionErr | null;
 };
 
-export type VersionOutcome = Omit<DetectOk, "version_history" | "writing_process"> | Omit<BilingualOk, "version_history" | "writing_process">;
-export type DocumentVersion = { id: string; label: string; created_at: string; kind: "initial" | "manual" | "recheck" | "restore"; result: VersionOutcome };
+export type VersionOutcome =
+  | Omit<DetectOk, "version_history" | "writing_process">
+  | Omit<BilingualOk, "version_history" | "writing_process">;
+export type DocumentVersion = {
+  id: string;
+  label: string;
+  created_at: string;
+  kind: "initial" | "manual" | "recheck" | "restore";
+  result: VersionOutcome;
+};
 export type WritingEventKind = DocumentVersion["kind"] | "checkpoint" | "review";
 export type WritingEvent = {
-  id: string; kind: WritingEventKind; label: string; created_at: string; updated_at: string;
-  origin: "action" | "version"; version_id?: string; comparison_base_id?: string;
-  review?: { lang: ScoreLang; paragraph_index: number; sentence_index: number; excerpt: string; state: SentenceReview["state"] | null; note: string; updates: number };
+  id: string;
+  kind: WritingEventKind;
+  label: string;
+  created_at: string;
+  updated_at: string;
+  origin: "action" | "version";
+  version_id?: string;
+  comparison_base_id?: string;
+  review?: {
+    lang: ScoreLang;
+    paragraph_index: number;
+    sentence_index: number;
+    excerpt: string;
+    state: SentenceReview["state"] | null;
+    note: string;
+    updates: number;
+  };
 };
-export type WritingProcess = { events: WritingEvent[]; total_events: number; rechecks: number; reviews: number };
+export type WritingProcess = {
+  events: WritingEvent[];
+  total_events: number;
+  rechecks: number;
+  reviews: number;
+};
 
 export function isBilingual(x: { lang: string }): x is BilingualOk {
   return x.lang === "bi";

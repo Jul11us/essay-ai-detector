@@ -80,9 +80,7 @@ _ZH_PHRASES = (
 )
 
 # 跨几个字的框式套话。命中后占住整段跨度，里面的单词不再单算。
-_EN_PATTERNS = (
-    ("not only … but also", re.compile(r"not only[^.\n]{0,80}?but also", re.I)),
-)
+_EN_PATTERNS = (("not only … but also", re.compile(r"not only[^.\n]{0,80}?but also", re.I)),)
 _ZH_PATTERNS = (
     ("不仅……而且", re.compile(r"不仅[^。！？!?\n]{0,48}而且")),
     ("不仅……更", re.compile(r"不仅[^。！？!?\n]{0,48}更")),

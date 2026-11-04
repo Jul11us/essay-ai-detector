@@ -19,7 +19,10 @@ export type FilePreview = {
   language_hint?: Lang | null;
 };
 
-export async function previewFile(file: File, signal?: AbortSignal): Promise<FilePreview | DetectErr> {
+export async function previewFile(
+  file: File,
+  signal?: AbortSignal,
+): Promise<FilePreview | DetectErr> {
   const fd = new FormData();
   fd.set("file", file);
   const r = await fetch("/api/preview", { method: "POST", body: fd, signal });

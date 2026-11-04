@@ -42,7 +42,19 @@ function resultRows(data: DetectOk): Cell[][] {
   for (const p of data.paragraphs) {
     const sentences = (p.sentences ?? []).filter((s) => s.text);
     if (!sentences.length) {
-      rows.push([data.lang, p.index + 1, "", prob(p.score), prob(p.score), p.verdict, "", p.text || p.excerpt, "", "", ""]);
+      rows.push([
+        data.lang,
+        p.index + 1,
+        "",
+        prob(p.score),
+        prob(p.score),
+        p.verdict,
+        "",
+        p.text || p.excerpt,
+        "",
+        "",
+        "",
+      ]);
       continue;
     }
     sentences.forEach((s, i) => {
@@ -93,7 +105,16 @@ export function exportCsvFor(data: Outcome): string {
   return isBilingual(data) ? buildBilingualCsv(data) : buildResultCsv(data);
 }
 
-const BATCH_HEADER = ["file", "status", "language", "score", "verdict", "confidence", "characters", "message"];
+const BATCH_HEADER = [
+  "file",
+  "status",
+  "language",
+  "score",
+  "verdict",
+  "confidence",
+  "characters",
+  "message",
+];
 
 /** 批量汇总：混合文件按语言分行，不合成总分；未出分保留状态和原因。 */
 export function buildBatchCsv(rows: BatchRow[]): string {
@@ -105,15 +126,34 @@ export function buildBatchCsv(rows: BatchRow[]): string {
         const part = row.result[lang];
         if (!part) continue;
         written = true;
-        output.push(isSectionErr(part)
-          ? [row.name, "error", lang, "", "", "", "", part.message]
-          : [row.name, "done", lang, prob(part.score), part.verdict, part.confidence, part.char_count, ""]);
+        output.push(
+          isSectionErr(part)
+            ? [row.name, "error", lang, "", "", "", "", part.message]
+            : [
+                row.name,
+                "done",
+                lang,
+                prob(part.score),
+                part.verdict,
+                part.confidence,
+                part.char_count,
+                "",
+              ],
+        );
       }
       if (written) continue;
     }
     const data = row.result && !isBilingual(row.result) ? row.result : undefined;
-    output.push([row.name, row.status, data?.lang ?? row.lang ?? "", data ? prob(data.score) : "",
-      data?.verdict ?? "", data?.confidence ?? "", data?.char_count ?? "", row.message ?? ""]);
+    output.push([
+      row.name,
+      row.status,
+      data?.lang ?? row.lang ?? "",
+      data ? prob(data.score) : "",
+      data?.verdict ?? "",
+      data?.confidence ?? "",
+      data?.char_count ?? "",
+      row.message ?? "",
+    ]);
   }
   return toCsv(output);
 }

@@ -94,11 +94,34 @@ export function InputPanel({
   const anyFile = file ?? batchFiles[0] ?? null;
   // 与双语接口一致：填写分栏后使用分栏正文，否则使用整篇混合输入。
   const activeText = lang === "bi" && (enText.trim() || zhText.trim()) ? enText + zhText : text;
-  const charCount = file ? selection && filePreview?.blocks ? filePreview.blocks.filter((b) => selection.includes(b.index)).reduce((n, b) => n + b.char_count, 0) : filePreview?.char_count : activeText.replace(/\s/g, "").length;
-  const uploadButton = <button type="button" className="editor-upload" disabled={locked} onClick={() => fileInputRef.current?.click()}>
-    <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M10 12V3m-3.5 3.5L10 3l3.5 3.5M4 11v5h12v-5" /></svg>
-    {hasFile ? "替换文件" : "上传文件"}
-  </button>;
+  const charCount = file
+    ? selection && filePreview?.blocks
+      ? filePreview.blocks
+          .filter((b) => selection.includes(b.index))
+          .reduce((n, b) => n + b.char_count, 0)
+      : filePreview?.char_count
+    : activeText.replace(/\s/g, "").length;
+  const uploadButton = (
+    <button
+      type="button"
+      className="editor-upload"
+      disabled={locked}
+      onClick={() => fileInputRef.current?.click()}
+    >
+      <svg
+        viewBox="0 0 20 20"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        aria-hidden="true"
+      >
+        <path d="M10 12V3m-3.5 3.5L10 3l3.5 3.5M4 11v5h12v-5" />
+      </svg>
+      {hasFile ? "替换文件" : "上传文件"}
+    </button>
+  );
   return (
     <section className="input-panel" aria-labelledby="input-title">
       <div className="manuscript-editor">
@@ -142,8 +165,15 @@ export function InputPanel({
 
         <div className="editor-canvas">
           <div className="editor-entry">
-            {hasFile ? <span>文档导入</span> : lang === "bi" ? <span>中英文分栏</span> : <label htmlFor="manuscript-text">粘贴正文</label>}
-            {!hasFile && <span className="entry-or">或</span>}{uploadButton}
+            {hasFile ? (
+              <span>文档导入</span>
+            ) : lang === "bi" ? (
+              <span>中英文分栏</span>
+            ) : (
+              <label htmlFor="manuscript-text">粘贴正文</label>
+            )}
+            {!hasFile && <span className="entry-or">或</span>}
+            {uploadButton}
             <span className="editor-formats">TXT / DOCX / PDF · 可多选</span>
           </div>
           <input
@@ -154,16 +184,25 @@ export function InputPanel({
             multiple
             accept=".txt,.docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             disabled={locked}
-            onClick={(e) => { e.currentTarget.value = ""; }}
+            onClick={(e) => {
+              e.currentTarget.value = "";
+            }}
             onChange={(e) => onFiles(Array.from(e.target.files ?? []))}
           />
           {showSuggestion && !inBatch && (
             <p className="language-hint">
               输入看起来像{LANGUAGE_LABEL[suggestion]}。
-              <button type="button" className="text-btn" disabled={locked} onClick={() => {
-                setLang(suggestion);
-                if (suggestion === "bi") setMixOpen(true);
-              }}>切换为{LANGUAGE_LABEL[suggestion]}</button>
+              <button
+                type="button"
+                className="text-btn"
+                disabled={locked}
+                onClick={() => {
+                  setLang(suggestion);
+                  if (suggestion === "bi") setMixOpen(true);
+                }}
+              >
+                切换为{LANGUAGE_LABEL[suggestion]}
+              </button>
               <span>（仅根据文字脚本提示）</span>
             </p>
           )}
@@ -241,7 +280,11 @@ export function InputPanel({
             </>
           )}
 
-          {batchSelectionError && <p className="fail" role="alert">{batchSelectionError}</p>}
+          {batchSelectionError && (
+            <p className="fail" role="alert">
+              {batchSelectionError}
+            </p>
+          )}
           {inBatch && (
             <div className="file-preview" role="status">
               <strong>批量检测 · {batchFiles.length} 个文件</strong>
@@ -250,7 +293,12 @@ export function InputPanel({
                   <li key={`${f.name}:${i}`}>{f.name}</li>
                 ))}
               </ul>
-              <button type="button" className="text-btn" disabled={locked} onClick={() => onFiles([])}>
+              <button
+                type="button"
+                className="text-btn"
+                disabled={locked}
+                onClick={() => onFiles([])}
+              >
                 清除这 {batchFiles.length} 个文件
               </button>
               <p>
@@ -261,18 +309,44 @@ export function InputPanel({
           )}
           {file && (
             <div className="file-preview" role="status">
-              <div className="file-preview-heading"><strong>文件文字预览 · {file.name}</strong>
-                <button type="button" className="text-btn" aria-label={`清除 ${file.name}`} disabled={locked} onClick={() => {
-                  restoreDraftFocus.current = true;
-                  onFile(null);
-                }}>移除文件</button></div>
+              <div className="file-preview-heading">
+                <strong>文件文字预览 · {file.name}</strong>
+                <button
+                  type="button"
+                  className="text-btn"
+                  aria-label={`清除 ${file.name}`}
+                  disabled={locked}
+                  onClick={() => {
+                    restoreDraftFocus.current = true;
+                    onFile(null);
+                  }}
+                >
+                  移除文件
+                </button>
+              </div>
               {previewBusy && <p>正在提取文字…</p>}
               {previewError && <p className="fail">{previewError}</p>}
-          {filePreview && (
-            <>
-              {onSelection && <ScopeSelector preview={filePreview} selection={selection} locked={locked} onChange={onSelection} />}
-                  <p>{filePreview.char_count} 字符。{filePreview.truncated ? "这里只显示前 5000 字符。" : ""}确认下面是你想检测的正文；文件检测仍使用原文件的段落信息。</p>
-                  <textarea aria-label="文件提取文字预览" readOnly value={filePreview.text} rows={7} />
+              {filePreview && (
+                <>
+                  {onSelection && (
+                    <ScopeSelector
+                      preview={filePreview}
+                      selection={selection}
+                      locked={locked}
+                      onChange={onSelection}
+                    />
+                  )}
+                  <p>
+                    {filePreview.char_count} 字符。
+                    {filePreview.truncated ? "这里只显示前 5000 字符。" : ""}
+                    确认下面是你想检测的正文；文件检测仍使用原文件的段落信息。
+                  </p>
+                  <textarea
+                    aria-label="文件提取文字预览"
+                    readOnly
+                    value={filePreview.text}
+                    rows={7}
+                  />
                 </>
               )}
             </div>
@@ -281,15 +355,33 @@ export function InputPanel({
 
         <div className="editor-footer">
           <div className="input-meta">
-            <span>{inBatch ? `${batchFiles.length} 个文件 · 自动识别语言` : charCount === undefined ? previewBusy ? "正在提取文字…" : "暂无文字预览" : `${charCount.toLocaleString()} 字符`}</span>
+            <span>
+              {inBatch
+                ? `${batchFiles.length} 个文件 · 自动识别语言`
+                : charCount === undefined
+                  ? previewBusy
+                    ? "正在提取文字…"
+                    : "暂无文字预览"
+                  : `${charCount.toLocaleString()} 字符`}
+            </span>
             <span>{hasFile ? "检测使用文件中的正文" : "保留段落 · 逐句复核"}</span>
           </div>
           <button type="button" className="go" disabled={!readyToSubmit} onClick={onSubmit}>
             {(busy || batchRunning) && <span className="button-spinner" aria-hidden="true" />}
-            {batchRunning ? "正在批量检测…" : busy ? "正在检测…" : inBatch
-              ? batchPending === batchFiles.length ? `批量检测 ${batchFiles.length} 个文件`
-                : batchPending > 0 ? `继续检测 ${batchPending} 个未完成文件` : "这批文件已全部完成"
-              : "开始检测"}<span className="go-arrow" aria-hidden="true">→</span>
+            {batchRunning
+              ? "正在批量检测…"
+              : busy
+                ? "正在检测…"
+                : inBatch
+                  ? batchPending === batchFiles.length
+                    ? `批量检测 ${batchFiles.length} 个文件`
+                    : batchPending > 0
+                      ? `继续检测 ${batchPending} 个未完成文件`
+                      : "这批文件已全部完成"
+                  : "开始检测"}
+            <span className="go-arrow" aria-hidden="true">
+              →
+            </span>
           </button>
         </div>
       </div>
@@ -298,21 +390,38 @@ export function InputPanel({
         <div className="status-row" role="status">
           <span className={`dot ${status?.phase ?? "downloading"}`} />
           <span className={status?.phase === "ready" ? "sr-only" : undefined}>{statusLine}</span>
-          {status && <span className="models">英文{status.models.en ? "可用" : "未就绪"} · 中文{status.models.zh ? "可用" : "未就绪"}</span>}
+          {status && (
+            <span className="models">
+              英文{status.models.en ? "可用" : "未就绪"} · 中文
+              {status.models.zh ? "可用" : "未就绪"}
+            </span>
+          )}
           {runtimeNote && <span className="runtime-note">{runtimeNote}</span>}
         </div>
-        <details className="upload-help"><summary>上传说明</summary><p>支持 TXT、Word（.docx）和文字版 PDF。可多选，每批最多 20 个文件。扫描版 PDF 读不出文字，会直接提示你换文字版。</p></details>
+        <details className="upload-help">
+          <summary>上传说明</summary>
+          <p>
+            支持 TXT、Word（.docx）和文字版 PDF。可多选，每批最多 20 个文件。扫描版 PDF
+            读不出文字，会直接提示你换文字版。
+          </p>
+        </details>
       </div>
       {busy && (
         <div className="running" role="status">
-          <span>已用 {formatElapsed(elapsed)}。长文可能要几十秒。改某一段可以等结果出来后单段重测。</span>
+          <span>
+            已用 {formatElapsed(elapsed)}。长文可能要几十秒。改某一段可以等结果出来后单段重测。
+          </span>
           <button type="button" className="text-btn" onClick={onCancel}>
             取消检测
           </button>
         </div>
       )}
-      {!lang && !inBatch && <p className="hint input-readiness">选择检测语言，粘贴正文或上传文件后即可开始。</p>}
-      {lang && lang !== "bi" && !canSubmit(lang, text, anyFile) && <p className="hint">请粘贴或上传。</p>}
+      {!lang && !inBatch && (
+        <p className="hint input-readiness">选择检测语言，粘贴正文或上传文件后即可开始。</p>
+      )}
+      {lang && lang !== "bi" && !canSubmit(lang, text, anyFile) && (
+        <p className="hint">请粘贴或上传。</p>
+      )}
       {lang === "bi" && !canSubmit(lang, text, anyFile, { en: enText, zh: zhText }) && (
         <p className="hint">请填写英文或中文，或上传整篇。</p>
       )}
@@ -322,7 +431,9 @@ export function InputPanel({
       {lang && lang !== "bi" && !inBatch && !langReady && status?.phase !== "error" && (
         <p className="hint">所选语言的模型还没就绪。</p>
       )}
-      {inBatch && !status?.models.en && !status?.models.zh && <p className="hint">请等待检测模型就绪。</p>}
+      {inBatch && !status?.models.en && !status?.models.zh && (
+        <p className="hint">请等待检测模型就绪。</p>
+      )}
     </section>
   );
 }

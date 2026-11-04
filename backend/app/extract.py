@@ -129,7 +129,10 @@ def _check_docx_archive(data: bytes) -> None:
             members = archive.infolist()
     except Exception as exc:  # BadZipFile、截断、异常的目录项都算读不了
         raise DetectError("parse_failed") from exc
-    if len(members) > MAX_DOCX_ENTRIES or sum(m.file_size for m in members) > MAX_DOCX_UNCOMPRESSED_BYTES:
+    if (
+        len(members) > MAX_DOCX_ENTRIES
+        or sum(m.file_size for m in members) > MAX_DOCX_UNCOMPRESSED_BYTES
+    ):
         raise DetectError("archive_too_large")
 
 

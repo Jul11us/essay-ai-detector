@@ -186,7 +186,9 @@ export function composition(doc: DetectOk): Composition {
   const detail = {
     ai: `按字数，约 ${pct(ai)} 的内容落在模型较高分档。`,
     mixed: `按字数，约 ${pct(ai)} 为较高分、${pct(human)} 为较低分、${pct(unclear)} 不确定。${
-      spans.length ? `较高分内容集中在 ${spans.length} 处，见下方区段。` : "较高分句子比较分散，没有连成片。"
+      spans.length
+        ? `较高分内容集中在 ${spans.length} 处，见下方区段。`
+        : "较高分句子比较分散，没有连成片。"
     }`,
     human: `按字数，约 ${pct(human)} 为较低分，较高分内容不到 ${pct(MIXED_MIN_SHARE)}。`,
     unclear: `较高分内容占 ${pct(ai)}，另有 ${pct(unclear)} 落在不确定档，模型对这篇拿不准。`,
@@ -206,12 +208,18 @@ export function composition(doc: DetectOk): Composition {
 }
 
 export function unitPlace(u: Unit): string {
-  return u.sentIndex === null ? `第 ${u.paraIndex + 1} 段` : `第 ${u.paraIndex + 1} 段第 ${u.sentIndex + 1} 句`;
+  return u.sentIndex === null
+    ? `第 ${u.paraIndex + 1} 段`
+    : `第 ${u.paraIndex + 1} 段第 ${u.sentIndex + 1} 句`;
 }
 
 export function spanPlace(s: Span): string {
   if (s.first === s.last) return unitPlace(s.first);
-  if (s.first.paraIndex === s.last.paraIndex && s.first.sentIndex !== null && s.last.sentIndex !== null) {
+  if (
+    s.first.paraIndex === s.last.paraIndex &&
+    s.first.sentIndex !== null &&
+    s.last.sentIndex !== null
+  ) {
     return `第 ${s.first.paraIndex + 1} 段第 ${s.first.sentIndex + 1}–${s.last.sentIndex + 1} 句`;
   }
   return `${unitPlace(s.first)} 至 ${unitPlace(s.last)}`;

@@ -7,7 +7,8 @@ export function MarkerPanel({ markers }: { markers?: MarkerHit[] }) {
     <aside className="markers">
       <h2>写作特征提示</h2>
       <p className="fine">
-        只提示，不改原文。这些是可观察的套话。它们可能出现在人写和 AI 写的文本中，不是模型分数的因果解释。
+        只提示，不改原文。这些是可观察的套话。它们可能出现在人写和 AI
+        写的文本中，不是模型分数的因果解释。
       </p>
       {rows.length === 0 ? (
         <p>清单里的典型套话，这篇一次都没出现。</p>

@@ -25,7 +25,7 @@ test("example text goes from paste to sentence-level result", async ({ page }) =
   await page.getByRole("button", { name: "开始检测" }).click();
 
   await expect(page.getByText("检测结果 · 英文")).toBeVisible();
-  await expect(page.getByText("全文 AI 率")).toBeVisible();
+  await expect(page.getByText("全文 AI 倾向分数")).toBeVisible();
   // 逐句打分在分数之后另起请求，句子变成可点击的色块。
   await expect(page.locator("button.sent-button").first()).toBeVisible();
   await expect(page.getByText("全文分布 · 按模型档位")).toBeVisible();
@@ -116,7 +116,11 @@ test("several files are scored one by one and each can be opened", async ({ page
   await ready(page);
   await pickLanguage(page, "英文");
   await page.locator('input[type="file"]').setInputFiles([
-    { name: "flagged.txt", mimeType: "text/plain", buffer: Buffer.from(EN_FLAGGED + " " + EN_PLAIN) },
+    {
+      name: "flagged.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from(EN_FLAGGED + " " + EN_PLAIN),
+    },
     { name: "plain.txt", mimeType: "text/plain", buffer: Buffer.from(EN_PLAIN + " " + EN_PLAIN) },
     { name: "broken.pdf", mimeType: "application/pdf", buffer: Buffer.from("not a pdf") },
   ]);
@@ -146,7 +150,9 @@ test("several files are scored one by one and each can be opened", async ({ page
   expect(csv).toContain("broken.pdf,error");
 });
 
-test("batch retains paragraph rechecks when switching files and exporting the summary", async ({ page }) => {
+test("batch retains paragraph rechecks when switching files and exporting the summary", async ({
+  page,
+}) => {
   await ready(page);
   await pickLanguage(page, "英文");
   const flaggedText = `${EN_FLAGGED} ${EN_PLAIN}`;
@@ -170,7 +176,9 @@ test("batch retains paragraph rechecks when switching files and exporting the su
   await page.getByRole("button", { name: "查看 flagged.txt 的逐句结果" }).click();
   await expect(paragraph).toHaveClass(/low/);
   await expect(paragraph.locator("p.body")).toHaveText(editedText);
-  await expect(page.getByRole("table").getByRole("row", { name: /flagged\.txt/ })).toContainText("8.0%");
+  await expect(page.getByRole("table").getByRole("row", { name: /flagged\.txt/ })).toContainText(
+    "8.0%",
+  );
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "导出全部汇总 CSV" }).click();
@@ -178,9 +186,14 @@ test("batch retains paragraph rechecks when switching files and exporting the su
   expect(csv).toContain("flagged.txt,done,en,0.08,low");
 });
 
-test("batch automatically identifies English, Chinese and mixed files without a language choice", async ({ page }) => {
+test("batch automatically identifies English, Chinese and mixed files without a language choice", async ({
+  page,
+}) => {
   await ready(page);
-  const chinese = "上周末我和朋友在校园里散步，路过图书馆时看见门口摆着几箱旧书。我们停下来挑了两本小说，后来坐在湖边讨论了故事里的主人公。天气忽然变冷，我们把外套穿上，沿着小路走回宿舍。那天没有特别的计划，但一路上的聊天让我记得很清楚。".repeat(3);
+  const chinese =
+    "上周末我和朋友在校园里散步，路过图书馆时看见门口摆着几箱旧书。我们停下来挑了两本小说，后来坐在湖边讨论了故事里的主人公。天气忽然变冷，我们把外套穿上，沿着小路走回宿舍。那天没有特别的计划，但一路上的聊天让我记得很清楚。".repeat(
+      3,
+    );
   await page.locator('input[type="file"]').setInputFiles([
     { name: "english.txt", mimeType: "text/plain", buffer: Buffer.from(EN_TEXT) },
     { name: "chinese.txt", mimeType: "text/plain", buffer: Buffer.from(chinese) },
@@ -213,22 +226,33 @@ test("batch automatically identifies English, Chinese and mixed files without a 
   expect(csv).toContain("mixed.txt,done,zh");
 });
 
-test("batch cancellation keeps the active result and continues only remaining files", async ({ page }) => {
+test("batch cancellation keeps the active result and continues only remaining files", async ({
+  page,
+}) => {
   await ready(page);
   let calls = 0;
   let finish!: () => void;
   await page.route("**/api/detect", async (route) => {
     calls++;
-    if (calls === 1) await new Promise<void>((resolve) => { finish = resolve; });
+    if (calls === 1)
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
     await route.continue();
   });
-  await page.locator('input[type="file"]').setInputFiles(["a.txt", "b.txt", "c.txt"].map((name) => ({
-    name, mimeType: "text/plain", buffer: Buffer.from(EN_TEXT),
-  })));
+  await page.locator('input[type="file"]').setInputFiles(
+    ["a.txt", "b.txt", "c.txt"].map((name) => ({
+      name,
+      mimeType: "text/plain",
+      buffer: Buffer.from(EN_TEXT),
+    })),
+  );
   await page.getByRole("button", { name: "批量检测 3 个文件" }).click();
   await expect.poll(() => calls).toBe(1);
   await page.getByRole("button", { name: "取消后续文件" }).click();
-  await expect(page.getByText("当前文件会继续完成；尚未开始的文件将取消，完成结果会保留。")).toBeVisible();
+  await expect(
+    page.getByText("当前文件会继续完成；尚未开始的文件将取消，完成结果会保留。"),
+  ).toBeVisible();
   finish();
   await expect(page.getByText("共 3 个文件 · 完成 1 · 失败 0 · 已取消 2")).toBeVisible();
   expect(calls).toBe(1);
@@ -256,29 +280,41 @@ test("single-file retry and filters preserve other completed results", async ({ 
   await page.getByRole("button", { name: "重试 retry.txt" }).click();
   await expect(page.getByText("共 2 个文件 · 完成 2 · 失败 0 · 已取消 0")).toBeVisible();
   await page.getByRole("combobox", { name: "批量结果筛选" }).selectOption("all");
-  await expect(page.getByRole("table").getByRole("row", { name: /good.txt/ })).toContainText("完成");
-  await expect(page.getByRole("table").getByRole("row", { name: /retry.txt/ })).toContainText("完成");
+  await expect(page.getByRole("table").getByRole("row", { name: /good.txt/ })).toContainText(
+    "完成",
+  );
+  await expect(page.getByRole("table").getByRole("row", { name: /retry.txt/ })).toContainText(
+    "完成",
+  );
 });
 
 test("over-limit selection is explicitly rejected without truncating", async ({ page }) => {
   await ready(page);
-  await page.locator('input[type="file"]').setInputFiles(Array.from({ length: 21 }, (_, i) => ({
-    name: `file-${i}.txt`, mimeType: "text/plain", buffer: Buffer.from(EN_TEXT),
-  })));
+  await page.locator('input[type="file"]').setInputFiles(
+    Array.from({ length: 21 }, (_, i) => ({
+      name: `file-${i}.txt`,
+      mimeType: "text/plain",
+      buffer: Buffer.from(EN_TEXT),
+    })),
+  );
   await expect(page.getByRole("alert")).toContainText("你选择了 21 个文件，每批最多 20 个");
   await expect(page.getByRole("alert")).toContainText("本次选择未添加");
   await expect(page.getByText("批量检测 · 20 个文件")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "开始检测" })).toBeDisabled();
 });
 
-test("an unrecognised file can be retried with a manual language while finished files stay intact", async ({ page }) => {
+test("an unrecognised file can be retried with a manual language while finished files stay intact", async ({
+  page,
+}) => {
   await ready(page);
   let detects = 0;
-  page.on("request", (request) => { if (request.url().endsWith("/api/detect")) detects++; });
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/detect")) detects++;
+  });
   await page.route("**/api/preview", async (route) => {
     const response = await route.fetch();
     if (route.request().postData()?.includes('filename="unknown.txt"')) {
-      await route.fulfill({ response, json: { ...await response.json(), language_hint: null } });
+      await route.fulfill({ response, json: { ...(await response.json()), language_hint: null } });
     } else await route.fulfill({ response });
   });
   await page.locator('input[type="file"]').setInputFiles([

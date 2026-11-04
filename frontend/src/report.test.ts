@@ -46,6 +46,9 @@ describe("buildReportHtml", () => {
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<script>");
     expect(html).toContain("不能作为学术不端认定依据");
+    // 标签本身要说明这是模型原始分数，不能写成“AI 率”（会被读成占比）。
+    expect(html).toContain("AI 倾向分数（模型原始分数）");
+    expect(html).not.toContain("AI 率");
     expect(html).toContain("综上所述");
     expect(html).toContain("不是学校");
     expect(html).toContain("2026-09-27");

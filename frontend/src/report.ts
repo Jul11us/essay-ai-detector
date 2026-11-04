@@ -1,6 +1,13 @@
 import type { BilingualOk, DetectOk, Rhythm } from "./types";
 import { isSectionErr } from "./types";
-import { AI_RATE_LABEL, AI_RATE_NOTE, CONF_LABEL, VERDICT_LABEL, formatPercent, isShortParagraph } from "./copy";
+import {
+  AI_SCORE_LABEL,
+  AI_SCORE_NOTE,
+  CONF_LABEL,
+  VERDICT_LABEL,
+  formatPercent,
+  isShortParagraph,
+} from "./copy";
 import { suspectKey, topSuspects } from "./aggregate";
 import { composition, spanPlace } from "./composition";
 import { downloadText } from "./download";
@@ -78,7 +85,13 @@ function sectionHtml(data: DetectOk): string {
             })
             .join(" ")
         : esc(p.text || p.excerpt);
-      const notes = (p.sentences || []).filter((s) => s.review).map((s) => `<blockquote><strong>人工复核：${REVIEW_LABEL[s.review!.state]}</strong><p>${esc(s.text)}</p><p>${esc(s.review!.note || "未填写备注")}</p></blockquote>`).join("");
+      const notes = (p.sentences || [])
+        .filter((s) => s.review)
+        .map(
+          (s) =>
+            `<blockquote><strong>人工复核：${REVIEW_LABEL[s.review!.state]}</strong><p>${esc(s.text)}</p><p>${esc(s.review!.note || "未填写备注")}</p></blockquote>`,
+        )
+        .join("");
       return `<section class="para"><h3>第 ${p.index + 1} 段 · ${formatPercent(p.score)}% · ${VERDICT_LABEL[p.verdict]}</h3><p>${body}</p>${notes}</section>`;
     })
     .join("");
@@ -86,8 +99,8 @@ function sectionHtml(data: DetectOk): string {
     ? `<h2>句长波动 · ${esc(data.rhythm.label)}</h2><p>${esc(data.rhythm.note)}</p>${rhythmSvg(data.rhythm)}`
     : "";
   return `
-    <p class="score">${AI_RATE_LABEL} ${formatPercent(data.score)}% · ${VERDICT_LABEL[data.verdict]} · 文本充分度 ${CONF_LABEL[data.confidence]}</p>
-    <p>${AI_RATE_NOTE}</p>
+    <p class="score">${AI_SCORE_LABEL} ${formatPercent(data.score)}% · ${VERDICT_LABEL[data.verdict]} · 文本充分度 ${CONF_LABEL[data.confidence]}</p>
+    <p>${AI_SCORE_NOTE}</p>
     ${data.detection_scope ? `<h2>实际检测范围</h2><p>${esc(data.detection_scope.source_name)}：选中 ${data.detection_scope.selected_blocks} / ${data.detection_scope.total_blocks} 段，${data.detection_scope.selected_chars} / ${data.detection_scope.total_chars} 个非空白字符。</p><p>${esc(data.detection_scope.note)}</p>${data.detection_scope.excluded.map((item) => `<details><summary>${esc(item.reason)}</summary><p>${esc(item.text)}</p></details>`).join("")}` : ""}
     ${compoHtml}
     <p>文本充分度只由长度和段落分数计算。</p>

@@ -10,7 +10,9 @@ async function violations(page: Page) {
   return violations.map((v) => ({
     rule: v.id,
     impact: v.impact,
-    nodes: v.nodes.slice(0, 3).map((n) => ({ target: n.target.join(" "), detail: n.failureSummary })),
+    nodes: v.nodes
+      .slice(0, 3)
+      .map((n) => ({ target: n.target.join(" "), detail: n.failureSummary })),
   }));
 }
 
@@ -39,7 +41,8 @@ test("bilingual result page has none", async ({ page }) => {
 
 test("batch summary table has none", async ({ page }) => {
   await page.getByRole("button", { name: "英文" }).first().click();
-  const text = "My brother and I walked to the lake after school. The water was cold, so we only put our feet in and watched the ducks. We talked about the trip we wanted to take next summer and who would bring the map.";
+  const text =
+    "My brother and I walked to the lake after school. The water was cold, so we only put our feet in and watched the ducks. We talked about the trip we wanted to take next summer and who would bring the map.";
   await page.locator('input[type="file"]').setInputFiles([
     { name: "a.txt", mimeType: "text/plain", buffer: Buffer.from(`${text} ${text}`) },
     { name: "b.txt", mimeType: "text/plain", buffer: Buffer.from(`${text} ${text}`) },

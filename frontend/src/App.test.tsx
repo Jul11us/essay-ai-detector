@@ -2,13 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import {
-  canSubmit,
-  formatElapsed,
-  formatPercent,
-  formatResult,
-  isShortParagraph,
-} from "./copy";
+import { canSubmit, formatElapsed, formatPercent, formatResult, isShortParagraph } from "./copy";
 import type { DetectOk, Status } from "./types";
 
 describe("canSubmit", () => {
@@ -72,9 +66,7 @@ const SAMPLE: DetectOk = {
   review_label: "作业审查：按本站分数，暂未见明显高分段",
   review: "不是过关证明",
   disclaimer: "免责",
-  paragraphs: [
-    { index: 0, excerpt: "hello", score: 0.12, verdict: "low", char_count: 120 },
-  ],
+  paragraphs: [{ index: 0, excerpt: "hello", score: 0.12, verdict: "low", char_count: 120 }],
 };
 
 describe("formatResult", () => {
@@ -82,6 +74,8 @@ describe("formatResult", () => {
     const text = formatResult(SAMPLE);
     expect(text).toContain("未经作文样本校准");
     expect(text).not.toContain("作业审查");
+    expect(text).toContain("AI 倾向分数（模型原始分数）");
+    expect(text).not.toContain("AI 率");
   });
 
   it("marks over-short paragraphs in the copied text too", () => {
@@ -129,9 +123,7 @@ function jsonResponse(body: unknown): Response {
 type Handler = (url: string, init?: RequestInit) => Promise<Response>;
 
 function stubFetch(handler: Handler) {
-  const fn = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
-    handler(String(input), init),
-  );
+  const fn = vi.fn((input: RequestInfo | URL, init?: RequestInit) => handler(String(input), init));
   vi.stubGlobal("fetch", fn);
   return fn;
 }
@@ -195,7 +187,9 @@ describe("App 组件", () => {
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
     await userEvent.click(screen.getByRole("button", { name: "英文演示" }));
-    expect((screen.getByLabelText(/粘贴正文/) as HTMLTextAreaElement).value).toContain("neighborhood library");
+    expect((screen.getByLabelText(/粘贴正文/) as HTMLTextAreaElement).value).toContain(
+      "neighborhood library",
+    );
     expect(screen.getByText(/没有已知的人写或 AI 标签/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始检测" })).toBeEnabled();
   });
@@ -203,18 +197,24 @@ describe("App 组件", () => {
   it("上传文件先预览实际提取的正文，然后才允许检测", async () => {
     const fetchMock = stubFetch(async (url) => {
       if (url.includes("/api/status")) return jsonResponse(READY);
-      if (url.includes("/api/preview")) return jsonResponse({
-        text: "The extracted essay has two paragraphs.",
-        char_count: 39,
-        paragraph_count: 2,
-      });
+      if (url.includes("/api/preview"))
+        return jsonResponse({
+          text: "The extracted essay has two paragraphs.",
+          char_count: 39,
+          paragraph_count: 2,
+        });
       return jsonResponse(RESULT);
     });
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
     await userEvent.click(screen.getByRole("button", { name: /^英文$/ }));
-    await userEvent.upload(screen.getByLabelText(/上传 \.txt/), new File(["source"], "essay.txt", { type: "text/plain" }));
-    expect(await screen.findByLabelText("文件提取文字预览")).toHaveValue("The extracted essay has two paragraphs.");
+    await userEvent.upload(
+      screen.getByLabelText(/上传 \.txt/),
+      new File(["source"], "essay.txt", { type: "text/plain" }),
+    );
+    expect(await screen.findByLabelText("文件提取文字预览")).toHaveValue(
+      "The extracted essay has two paragraphs.",
+    );
     expect(screen.getByRole("button", { name: "开始检测" })).toBeEnabled();
     await userEvent.click(screen.getByRole("button", { name: "开始检测" }));
     expect(detectCalls(fetchMock)).toHaveLength(1);
@@ -222,12 +222,17 @@ describe("App 组件", () => {
 
   it("预览失败时不发送检测请求", async () => {
     const fetchMock = stubFetch(async (url) =>
-      url.includes("/api/status") ? jsonResponse(READY) : jsonResponse({ error: "parse_failed", message: "文件无法读取" }),
+      url.includes("/api/status")
+        ? jsonResponse(READY)
+        : jsonResponse({ error: "parse_failed", message: "文件无法读取" }),
     );
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
     await userEvent.click(screen.getByRole("button", { name: /^英文$/ }));
-    await userEvent.upload(screen.getByLabelText(/上传 \.txt/), new File(["bad"], "essay.pdf", { type: "application/pdf" }));
+    await userEvent.upload(
+      screen.getByLabelText(/上传 \.txt/),
+      new File(["bad"], "essay.pdf", { type: "application/pdf" }),
+    );
     expect(await screen.findByText("文件无法读取")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "开始检测" })).toBeDisabled();
     expect(detectCalls(fetchMock)).toHaveLength(0);
@@ -413,7 +418,12 @@ describe("App 组件", () => {
       if (url.includes("/api/sentences")) {
         return jsonResponse({
           sentences: [
-            { text: "AI wrote this sentence today.", score: 0.9, verdict: "high", highlight: "high" },
+            {
+              text: "AI wrote this sentence today.",
+              score: 0.9,
+              verdict: "high",
+              highlight: "high",
+            },
           ],
           capped: false,
           note: "",
@@ -431,9 +441,7 @@ describe("App 组件", () => {
     await userEvent.click(screen.getByRole("button", { name: "重测这一段" }));
     expect((await screen.findAllByText("18.0%")).length).toBeGreaterThan(0);
 
-    const bodies = detectCalls(fetchMock).map((call) =>
-      JSON.parse(String(call[1]?.body)),
-    );
+    const bodies = detectCalls(fetchMock).map((call) => JSON.parse(String(call[1]?.body)));
     expect(bodies[1].scope).toBe("paragraph");
     expect(bodies[1].text).toContain("word");
     expect(bodies[1].text).not.toBe(bodies[0].text);
@@ -485,7 +493,13 @@ describe("App 组件", () => {
         return jsonResponse({
           sentences: [
             { text: "Mild sentence here.", score: 0.65, verdict: "uncertain", highlight: "mid" },
-            { text: "Most suspicious sentence.", score: 0.96, verdict: "high", highlight: "high", observations: [{ phrase: "template phrase", count: 1 }] },
+            {
+              text: "Most suspicious sentence.",
+              score: 0.96,
+              verdict: "high",
+              highlight: "high",
+              observations: [{ phrase: "template phrase", count: 1 }],
+            },
           ],
           capped: false,
           note: "",
@@ -533,7 +547,14 @@ describe("App 组件", () => {
         const text = JSON.parse(String(init?.body)).text as string;
         scanned.push(text.split(" ")[0]);
         return jsonResponse({
-          sentences: [{ text: `${text.split(" ")[0]} scored sentence.`, score: 0.3, verdict: "low", highlight: null }],
+          sentences: [
+            {
+              text: `${text.split(" ")[0]} scored sentence.`,
+              score: 0.3,
+              verdict: "low",
+              highlight: null,
+            },
+          ],
           capped: false,
           note: "",
         });
@@ -546,7 +567,10 @@ describe("App 组件", () => {
     expect(await screen.findByText("charlie scored sentence.")).toBeInTheDocument();
     expect(await screen.findByText("alpha scored sentence.")).toBeInTheDocument();
     expect(scanned).toEqual(["bravo", "charlie", "alpha"]);
-    expect(screen.getByText("alpha scored sentence.")).toHaveAttribute("title", "查看本句模型分数：30.0%");
+    expect(screen.getByText("alpha scored sentence.")).toHaveAttribute(
+      "title",
+      "查看本句模型分数：30.0%",
+    );
     expect(screen.queryByText(/正在逐句打分/)).not.toBeInTheDocument();
   });
 
@@ -575,22 +599,41 @@ describe("App 组件", () => {
 
 describe("App 批量流程", () => {
   it("未选择语言时按每个文件的全文提示检测，并保留中英混合结果", async () => {
-    const mixed = { lang: "bi", note: "中英独立计算", disclaimer: "fixture", en: RESULT, zh: { ...RESULT, lang: "zh" } };
+    const mixed = {
+      lang: "bi",
+      note: "中英独立计算",
+      disclaimer: "fixture",
+      en: RESULT,
+      zh: { ...RESULT, lang: "zh" },
+    };
     let previews = 0;
     const fetchMock = stubFetch(async (url, init) => {
       if (url.includes("/api/status")) return jsonResponse(READY);
-      if (url.includes("/api/preview")) return jsonResponse({ text: "synthetic fixture", char_count: 100, paragraph_count: 1, truncated: false, language_hint: ++previews === 1 ? "en" : "bi" });
+      if (url.includes("/api/preview"))
+        return jsonResponse({
+          text: "synthetic fixture",
+          char_count: 100,
+          paragraph_count: 1,
+          truncated: false,
+          language_hint: ++previews === 1 ? "en" : "bi",
+        });
       const data = init?.body as FormData;
       return jsonResponse(data.get("lang") === "bi" ? mixed : RESULT);
     });
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
-    await userEvent.upload(screen.getByLabelText(/上传 \.txt/), [new File(["fixture"], "english.txt", { type: "text/plain" }), new File(["fixture"], "mixed.txt", { type: "text/plain" })]);
+    await userEvent.upload(screen.getByLabelText(/上传 \.txt/), [
+      new File(["fixture"], "english.txt", { type: "text/plain" }),
+      new File(["fixture"], "mixed.txt", { type: "text/plain" }),
+    ]);
     const go = screen.getByRole("button", { name: "批量检测 2 个文件" });
     expect(go).toBeEnabled();
     await userEvent.click(go);
     expect(await screen.findByText("共 2 个文件 · 完成 2 · 失败 0 · 已取消 0")).toBeInTheDocument();
-    expect(detectCalls(fetchMock).map((call) => (call[1]?.body as FormData).get("lang"))).toEqual(["en", "bi"]);
+    expect(detectCalls(fetchMock).map((call) => (call[1]?.body as FormData).get("lang"))).toEqual([
+      "en",
+      "bi",
+    ]);
     await userEvent.click(screen.getByRole("button", { name: "查看 mixed.txt 的逐句结果" }));
     expect(await screen.findByText("中英独立计算")).toBeInTheDocument();
     expect(screen.getByText("检测结果 · 中文")).toBeInTheDocument();
@@ -601,8 +644,17 @@ describe("App 批量流程", () => {
     render(<App />);
     await screen.findByText(/中英文模型均已就绪/);
     const upload = screen.getByLabelText(/上传 \.txt/);
-    await userEvent.upload(upload, [new File(["fixture"], "a.txt", { type: "text/plain" }), new File(["fixture"], "b.txt", { type: "text/plain" })]);
-    await userEvent.upload(upload, Array.from({ length: 21 }, (_, i) => new File(["fixture"], `${i}.txt`, { type: "text/plain" })));
+    await userEvent.upload(upload, [
+      new File(["fixture"], "a.txt", { type: "text/plain" }),
+      new File(["fixture"], "b.txt", { type: "text/plain" }),
+    ]);
+    await userEvent.upload(
+      upload,
+      Array.from(
+        { length: 21 },
+        (_, i) => new File(["fixture"], `${i}.txt`, { type: "text/plain" }),
+      ),
+    );
     expect(await screen.findByRole("alert")).toHaveTextContent("本次选择未添加");
     expect(screen.getByText("批量检测 · 2 个文件")).toBeInTheDocument();
     expect(screen.queryByText("批量检测 · 20 个文件")).not.toBeInTheDocument();

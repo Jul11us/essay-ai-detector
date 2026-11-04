@@ -23,7 +23,16 @@ def test_health():
 def test_preview_extracts_file_without_model():
     hub.loaded = {"zh": False, "en": False}
     c = TestClient(app)
-    r = c.post("/api/preview", files={"file": ("essay.txt", "First paragraph.\n\nSecond paragraph.".encode("utf-8"), "text/plain")})
+    r = c.post(
+        "/api/preview",
+        files={
+            "file": (
+                "essay.txt",
+                "First paragraph.\n\nSecond paragraph.".encode("utf-8"),
+                "text/plain",
+            )
+        },
+    )
     assert r.status_code == 200
     assert r.json()["text"] == "First paragraph.\n\nSecond paragraph."
     assert "score" not in r.json()
@@ -77,7 +86,10 @@ def test_inflating_docx_gets_a_clear_error_on_both_upload_paths(monkeypatch):
     src = BytesIO()
     doc.save(src)
     out = BytesIO()
-    with zipfile.ZipFile(BytesIO(src.getvalue())) as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+    with (
+        zipfile.ZipFile(BytesIO(src.getvalue())) as zin,
+        zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout,
+    ):
         for info in zin.infolist():
             zout.writestr(info, zin.read(info.filename))
         zout.writestr("word/media/padding.bin", b"\0" * 2_000_000)
@@ -184,9 +196,7 @@ def test_paragraph_scope_accepts_a_single_block():
     rejected = c.post("/api/detect", json={"lang": "en", "text": text})
     assert rejected.status_code == 400
     assert rejected.json()["error"] == "too_short"
-    accepted = c.post(
-        "/api/detect", json={"lang": "en", "text": text, "scope": "paragraph"}
-    )
+    accepted = c.post("/api/detect", json={"lang": "en", "text": text, "scope": "paragraph"})
     assert accepted.status_code == 200
     assert accepted.json()["paragraphs"][0]["score"] == 0.2
 
@@ -243,7 +253,10 @@ def test_sentences_endpoint_takes_lower_of_single_and_context():
     hub.score = lambda text, lang: 0.9 if "robot" in text else 0.1
     r = c.post(
         "/api/sentences",
-        json={"lang": "en", "text": "A robot wrote this long line. A person wrote this other line."},
+        json={
+            "lang": "en",
+            "text": "A robot wrote this long line. A person wrote this other line.",
+        },
     )
     assert r.status_code == 200
     rows = r.json()["sentences"]

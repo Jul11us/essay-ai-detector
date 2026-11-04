@@ -106,7 +106,6 @@ def test_batch_length_mismatch_is_infer_failure():
     assert ei.value.code == "infer_failed"
 
 
-
 def test_sentence_observations_are_labeled_as_observations():
     out = run_sentences(
         "en",

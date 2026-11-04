@@ -44,12 +44,13 @@ def test_mismatch_english_on_chinese():
     assert ei.value.code == "language_mismatch"
 
 
-
 def test_excluded_references_do_not_change_score_or_model_input():
     seen = []
+
     def score(text, lang):
         seen.append(text)
         return 0.2
+
     body = "This paragraph describes a local visit with enough detail for the detector. " * 5
     text = body + "\n\nReferences\n\n" + "AI text " * 50
     out = run_detect("en", text, None, None, score)

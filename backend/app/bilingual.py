@@ -40,7 +40,9 @@ def _one(lang: str, text: str, score_fn: ScoreFn, revision: str | None = None) -
     if not raw:
         return None
     try:
-        return run_detect(lang, raw, None, None, score_fn, length_floor=BI_FLOOR[lang], model_revision=revision)
+        return run_detect(
+            lang, raw, None, None, score_fn, length_floor=BI_FLOOR[lang], model_revision=revision
+        )
     except DetectError as exc:
         # 取消是整次请求的事，不能当成「这一部分太短」塞进结果里接着跑另一半。
         if exc.code == "cancelled":
@@ -59,7 +61,8 @@ def run_bilingual(
     filename: str | None,
     file_bytes: bytes | None,
     score_fn: ScoreFn,
-    *, model_revisions: dict[str, str | None] | None = None,
+    *,
+    model_revisions: dict[str, str | None] | None = None,
 ) -> dict:
     if file_bytes is not None:
         from app.extract import extract_from_bytes

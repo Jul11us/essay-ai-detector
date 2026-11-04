@@ -4,9 +4,7 @@ from app.errors import DISCLAIMER, HTTP_STATUS, DetectError, MESSAGES
 def test_language_mismatch_message_is_exact():
     err = DetectError("language_mismatch")
     assert err.http_status == 400
-    assert err.message == (
-        "正文语言和所选语言明显不符。请改选后重试；本站不会在选错时给出分数。"
-    )
+    assert err.message == ("正文语言和所选语言明显不符。请改选后重试；本站不会在选错时给出分数。")
     assert err.message == MESSAGES["language_mismatch"]
 
 

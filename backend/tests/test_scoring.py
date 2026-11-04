@@ -41,9 +41,9 @@ def test_english_segment_always_fits_one_window():
     """
     worst_case = SEGMENT_CHARS["en"]
     assert worst_case < EN_INFER_TOKENS
-    assert content_windows(
-        worst_case, budget=EN_INFER_TOKENS - 2, step=EN_INFER_STRIDE
-    ) == [(0, worst_case)]
+    assert content_windows(worst_case, budget=EN_INFER_TOKENS - 2, step=EN_INFER_STRIDE) == [
+        (0, worst_case)
+    ]
 
 
 def test_chinese_segments_do_use_strided_windows():
@@ -217,4 +217,7 @@ def test_score_short_texts_splits_into_batches():
 
 
 def test_score_short_texts_empty():
-    assert score_short_texts([], FakeTok(1), FakeSoftmaxModel(0.4), head=HEAD_SOFTMAX, ai_index=1) == []
+    assert (
+        score_short_texts([], FakeTok(1), FakeSoftmaxModel(0.4), head=HEAD_SOFTMAX, ai_index=1)
+        == []
+    )

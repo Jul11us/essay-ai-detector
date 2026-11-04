@@ -110,7 +110,7 @@ def prepare_scoring_text(
             blocks.append("\n".join(lines))
         else:
             before = "\n".join(lines[:heading_index]).strip()
-            after = "\n".join(lines[heading_index + 1:]).strip()
+            after = "\n".join(lines[heading_index + 1 :]).strip()
             if before:
                 blocks.append(before)
             blocks.append(lines[heading_index].strip())
