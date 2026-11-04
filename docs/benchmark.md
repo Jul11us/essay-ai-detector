@@ -131,6 +131,8 @@ API 只允许 `http://127.0.0.1` 或 `http://localhost`，禁用代理环境变�
 
 网站不自动寻找或启用候选文件。通过 `DETECTOR_CALIBRATION_PATH` 指定本机配置文件后启动后端，运行时仍核对语言、模型/修订、状态、训练重叠证据、样本计数、策略、独立验证指标和字符范围。失败时沿用默认门槛，并在检测结果中说明。配置只适用于全文；用户局部修改后重新聚合，若长度超出适用范围，也会恢复默认门槛。
 
+“模型/修订”里的修订（`model_revision`）是一个指纹，算进了：权重文件（分片保存的权重包括索引和每个分片）、分词器和配置文件、运行方式（PyTorch / ONNX / ONNX INT8）、本站的打分版本号，以及参与打分的库的**主版本.次版本**（PyTorch 运行时为 torch、transformers、tokenizers；ONNX 运行时为 onnxruntime、transformers、tokenizers）。同样的权重换一个库版本可能打出不同的分数，而 `requirements.txt` 只限定了最低版本，所以升级这些库的次版本（例如 transformers 4.57 → 4.58）后，原来的校准配置会自动失效、回到默认门槛，需要重新评测；只升补丁版本（4.57.1 → 4.57.3）不影响。当前用的版本可以在 `/api/status` 的 `inference_stack` 里看到，评测报告和 `summary.md` 也会记下评测时的版本。
+
 ```powershell
 $env:DETECTOR_CALIBRATION_PATH = (Resolve-Path ../experiments/benchmark-private/public-hc3/calibration.json).Path
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000

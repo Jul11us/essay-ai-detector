@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 
 from app.errors import DetectError
-from app.model_identity import model_revision
+from app.model_identity import inference_stack, model_revision
 from app.sanity import check_zh_direction
 from app.scoring import (
     EN_INFER_STRIDE,
@@ -90,6 +90,10 @@ class ModelHub:
             "loading": self._thread is not None and self._thread.is_alive(),
             "runtime": dict(self._runtimes),
             "model_revisions": dict(self.revisions),
+            # 实际参与打分的库版本（主版本.次版本）；它们也算进了 model_revisions。
+            "inference_stack": {
+                lang: inference_stack(self._runtimes[lang]) for lang in ("zh", "en")
+            },
         }
 
     def assert_ready(self, lang: str | None = None) -> None:

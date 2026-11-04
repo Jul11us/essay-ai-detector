@@ -127,3 +127,13 @@ def test_ai_class_name_is_spaced_like_the_rest_of_the_site():
     assert explain_reason("calibration: fewer than 30 independent ai samples/groups").startswith(
         "校准集的 AI 独立样本/组少于 30 个"
     )
+
+
+def test_summary_names_the_inference_libraries_when_the_report_has_them():
+    rows, predictions = _dataset(2)
+    report = summarize(rows, predictions)
+    report["inference"] = {
+        "inference_stack": {"en": {"torch": "2.9", "transformers": "4.57", "tokenizers": "0.22"}}
+    }
+    text = render_summary(report)
+    assert "英文推理库：tokenizers 0.22、torch 2.9、transformers 4.57" in text

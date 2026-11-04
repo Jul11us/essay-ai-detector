@@ -6,7 +6,14 @@ import httpx
 import pytest
 
 from app.evaluation_stats import make_records, summarize
-from benchmark import load_checkpoint, load_manifest, main, run_api, wait_for_models
+from benchmark import (
+    fetch_inference,
+    load_checkpoint,
+    load_manifest,
+    main,
+    run_api,
+    wait_for_models,
+)
 
 
 def test_counts_false_flags_and_misses_without_treating_mixed_as_binary():
@@ -586,3 +593,20 @@ def test_ctrl_c_keeps_progress_and_says_how_to_resume(tmp_path, monkeypatch):
     assert str(stop.value).startswith("Stopped: interrupted (Ctrl-C)")
     assert "1 predictions are saved" in str(stop.value)
     assert [json.loads(line)["id"] for line in saved.read_text().splitlines()] == ["a"]
+
+
+def test_fetch_inference_copies_only_known_provenance_keys(monkeypatch):
+    status = {
+        "runtime": {"en": "pytorch"},
+        "inference_stack": {"en": {"torch": "2.9", "transformers": "4.57", "tokenizers": "0.22"}},
+        "model_revisions": {"en": "sha256:abc"},
+        "detail": "SECRET server text",
+    }
+    _patch_client(monkeypatch, lambda request: httpx.Response(200, json=status))
+    assert fetch_inference("http://127.0.0.1:8000") == {
+        "runtime": {"en": "pytorch"},
+        "inference_stack": status["inference_stack"],
+        "model_revisions": {"en": "sha256:abc"},
+    }
+    _patch_client(monkeypatch, lambda request: httpx.Response(500, text="oops"))
+    assert fetch_inference("http://127.0.0.1:8000") is None

@@ -209,6 +209,12 @@ def render_summary(report: dict, profile: dict | None = None) -> str:
     for lang, models in sorted(_models(records).items()):
         listed = "；".join(f"`{m}` @ `{rev}`" for m, rev in sorted(models))
         out.append(f"- {LANG_NAMES.get(lang, lang)}模型：{listed}")
+    stacks = (report.get("inference") or {}).get("inference_stack") or {}
+    for lang in langs:
+        stack = stacks.get(lang)
+        if isinstance(stack, dict) and stack:
+            listed = "、".join(f"{k} {v}" for k, v in sorted(stack.items()))
+            out.append(f"- {LANG_NAMES.get(lang, lang)}推理库：{listed}")
     if profile is not None:
         out.append(f"- 样本集指纹：`{profile['dataset_fingerprint']}`")
     latency = report.get("latency", {})

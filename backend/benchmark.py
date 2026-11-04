@@ -186,6 +186,30 @@ def _error_code(response) -> str:
     return f" ({code})" if isinstance(code, str) and re.fullmatch(r"[a-z_]{1,40}", code) else ""
 
 
+def fetch_inference(base_url: str) -> dict | None:
+    """What the server says it scores with: runtime, library versions and weight fingerprints.
+
+    Kept in the report as provenance; only these known keys are copied.
+    """
+    import httpx
+
+    _check_local_api(base_url)
+    try:
+        with httpx.Client(
+            base_url=base_url, timeout=10.0, follow_redirects=False, trust_env=False
+        ) as client:
+            status = client.get("/api/status").json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(status, dict):
+        return None
+    return {
+        key: status[key]
+        for key in ("runtime", "inference_stack", "model_revisions")
+        if isinstance(status.get(key), dict)
+    } or None
+
+
 def run_api(rows: list[dict], base_url: str, checkpoint: Path | None = None) -> list[dict]:
     """Score every manifest row through the exact local /api/detect pipeline.
 
@@ -324,6 +348,7 @@ def main() -> None:
     parser.add_argument("--min-samples-per-class", type=int, default=30)
     args = parser.parse_args()
     rows = load_manifest(args.manifest)
+    inference = None
     if args.predictions:
         predictions = load_predictions(args.predictions)
     else:
@@ -337,6 +362,7 @@ def main() -> None:
             if args.wait_for_models > 0:
                 wait_for_models(args.api, {row["lang"] for row in rows}, args.wait_for_models)
             predictions = run_api(rows, args.api, checkpoint=checkpoint)
+            inference = fetch_inference(args.api)
         except (RuntimeError, ValueError, KeyboardInterrupt) as error:
             saved = (
                 sum(1 for line in checkpoint.read_text(encoding="utf-8").splitlines() if line)
@@ -352,6 +378,8 @@ def main() -> None:
             reason = "interrupted (Ctrl-C)" if isinstance(error, KeyboardInterrupt) else error
             sys.exit(f"Stopped: {reason}\n{hint}")
     report = summarize(rows, predictions, confidence_level=args.confidence_level)
+    if inference:
+        report["inference"] = inference
     profile = None
     if args.calibration_out:
         profile = build_profile(

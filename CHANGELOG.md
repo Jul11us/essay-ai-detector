@@ -5,6 +5,7 @@
 - **评测流程**：`benchmark.py` 每评完一份就写入预测文件，中途出错或按 Ctrl-C 都保留进度，`--resume` 续跑且不重算；`--wait-for-models` 等模型加载完再开始；`--summary-out` 生成可读的 `summary.md`（不含作文正文和样本 ID）。出错时只显示样本 ID、HTTP 状态和本站的固定错误代码。
 - **修复**：接口识别不出权重版本时，整批推理跑完后生成报告会失败，而且预测此前要等报告生成后才写入，会全部丢失；现在记为 `unknown`，报告照常生成，校准会把它列为不能启用的原因。
 - **自己的作文**：新增 `scripts/build_manifest.py`，从一个文件夹加 `metadata.csv` 生成评测清单（SHA-256、按组确定性划分校准/测试集、逐行报错）；只接受 `experiments/benchmark-private/` 下的文件夹。
+- **校准绑定推理库版本**：模型修订指纹此前只包含权重、分词器和运行方式，不包含 transformers / tokenizers / torch（或 onnxruntime）的版本，而依赖只写了最低版本；升级这些库后，原来的校准会被悄悄沿用。现在指纹包含它们的主版本.次版本，`/api/status` 显示 `inference_stack`，评测报告和 `summary.md` 记下评测时的版本。分片保存的权重（带 `*.index.json`）现在也能算出指纹，不再记为未知。
 - **文档**：`docs/benchmark.md` 补上完整操作步骤，以及私人作文在现行策略下最多只能是 `candidate` 的说明。
 
 ## 2026-10-08
