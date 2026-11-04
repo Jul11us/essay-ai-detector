@@ -21,17 +21,51 @@ HC3 问答不是学生作文；作者母语、教育背景通常未知，报告�
 
 ## 一次评分，可重放统计
 
-先启动后端并确认所测中英模型均就绪。在 `backend/` 下运行；使用项目虚拟环境或已安装 `requirements-dev.txt` 的 Python：
+先启动后端（`打开.bat`、`scripts/dev.sh` 或 `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000`）。在 `backend/` 下运行；使用项目虚拟环境或已安装 `requirements-dev.txt` 的 Python：
 
 ```powershell
-python benchmark.py ../experiments/benchmark-private/public-hc3/manifest.jsonl --api http://127.0.0.1:8000 --predictions-out ../experiments/benchmark-private/public-hc3/predictions.jsonl --out ../experiments/benchmark-private/public-hc3/report.json --calibration-out ../experiments/benchmark-private/public-hc3/calibration.json
+python benchmark.py ../experiments/benchmark-private/public-hc3/manifest.jsonl --wait-for-models 1800 --predictions-out ../experiments/benchmark-private/public-hc3/predictions.jsonl --out ../experiments/benchmark-private/public-hc3/report.json --calibration-out ../experiments/benchmark-private/public-hc3/calibration.json --summary-out ../experiments/benchmark-private/public-hc3/summary.md
 ```
+
+- `--wait-for-models 1800`：先等后端把清单里用到的语言模型加载完（最多 1800 秒）。模型还在下载或加载时不会直接失败；加载结束但某种语言没有模型时立即停止并说明。
+- `--predictions-out`：每评完一份就追加写一行，进度不会因为中断而丢失。
+- `--summary-out`：生成一页可读的 `summary.md`（见下文“报告读法”），不含作文正文和样本 ID，可以转给别人看。
+
+**中途停下怎么办。** 任何一份样本被接口拒绝（例如 `too_short`、`language_mismatch`）、请求失败或你按了 Ctrl-C，脚本都会停在那一份，并提示已经保存了多少份。处理好原因后（修改或移除那份样本；改动了文件就重新生成清单），在原命令后面加 `--resume` 再运行，已保存的样本不会重算。不加 `--resume` 时，脚本拒绝覆盖已有进度的预测文件。续跑时如果同一语言的模型 ID 或权重修订变了，脚本会拒绝把两批结果混在一起，需要换一个新的预测文件重新开始。
+
+错误信息只显示样本 ID、HTTP 状态，以及本站接口返回的固定错误代码（如 `too_short`），不回显其他响应内容。接口无法识别权重版本时，预测里的 `model_revision` 记为 `unknown`：报告照常生成，但校准会把它列为不能启用的原因。
 
 后续直接重放预测，不再消耗模型推理时间：
 
 ```powershell
-python benchmark.py ../experiments/benchmark-private/public-hc3/manifest.jsonl --predictions ../experiments/benchmark-private/public-hc3/predictions.jsonl --out ../experiments/benchmark-private/public-hc3/report.json --calibration-out ../experiments/benchmark-private/public-hc3/calibration.json
+python benchmark.py ../experiments/benchmark-private/public-hc3/manifest.jsonl --predictions ../experiments/benchmark-private/public-hc3/predictions.jsonl --out ../experiments/benchmark-private/public-hc3/report.json --calibration-out ../experiments/benchmark-private/public-hc3/calibration.json --summary-out ../experiments/benchmark-private/public-hc3/summary.md
 ```
+
+## 用自己收集的作文评测
+
+学生作文才是本项目真正面向的文本。前提是作者书面同意、来源清楚，而且作文只放在本机被 Git 忽略的 `experiments/benchmark-private/` 里。
+
+1. 建一个文件夹，例如 `experiments/benchmark-private/my-essays/`，把作文（`.txt`、`.docx` 或文字版 PDF）放进去，再写一个 `metadata.csv`（UTF-8；Excel 另存为“CSV UTF-8”即可）：
+
+   ```csv
+   file,lang,label,group_id,source,license,writer_group,domain
+   essays/0001-human.txt,en,human,0001,2026 秋季课程作业,作者书面同意仅用于本机评测,non_native,argumentative
+   essays/0001-ai.txt,en,ai,0001,同一题目由生成模型写作,评测者生成,generated,argumentative
+   ```
+
+   必填 `file`、`lang`（en/zh）、`label`（human/ai/mixed）、`source`。同一原稿的不同版本（人写原稿、AI 改写、混合稿）必须用同一个 `group_id`。可选 `split`（calibration/test）、`license`、`source_url`、`writer_group`、`domain`、`generated_model`、`training_overlap`（unknown/possible/excluded）和 `training_overlap_evidence`。
+
+2. 在仓库根目录生成清单：
+
+   ```powershell
+   python scripts/build_manifest.py experiments/benchmark-private/my-essays
+   ```
+
+   脚本记录每个文件的 SHA-256；没有写 `split` 的按 `group_id` 和 `--seed` 确定性地分到校准集或测试集（默认各半，`--calibration-share` 可调），同一组永远在同一边。重复内容、组跨 split、文件不在文件夹内、`excluded` 却没有证据，都会报错并指出 CSV 的行号。文件夹不在 `experiments/benchmark-private/` 下会被拒绝，以免私人作文被提交。
+
+3. 按上一节的命令评测，把路径换成这个文件夹。
+
+**这类结果目前无法“启用”。** 现行校准策略要求每份样本都有公开的来源网址（`source_url`）和训练重叠排除证据，私人作文通常两者都没有，所以配置最多是 `candidate`。这不影响报告本身的价值：`summary.md` 里的误报、漏报和不确定比例，正是在你关心的作文上的实测结果。
 
 API 只允许 `http://127.0.0.1` 或 `http://localhost`，禁用代理环境变量和重定向。异常只报告样本 ID、HTTP 状态或固定错误说明，不回显服务器正文。报告和预测文件通过字段白名单保存 ID、来源、标签、原始分数、模型 ID/权重修订、处理后的字符/词数、充分度、API 时延；不写作文正文、段落摘录或本机绝对输入文件路径。
 
@@ -102,4 +136,4 @@ $env:DETECTOR_CALIBRATION_PATH = (Resolve-Path ../experiments/benchmark-private/
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-没有合格的真实验证结果时，完成评测和生成候选配置仍有价值，但不应宣称已经提高准确率或已取得生产可用阈值。实际本机结果保存在语料目录的 `summary.md`，与原始预测、完整报告和配置一起复核。
+没有合格的真实验证结果时，完成评测和生成候选配置仍有价值，但不应宣称已经提高准确率或已取得生产可用阈值。实际本机结果用 `--summary-out` 写到语料目录的 `summary.md`，与原始预测、完整报告和配置一起复核。
