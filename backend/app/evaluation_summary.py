@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 LANG_NAMES = {"en": "英文", "zh": "中文"}
@@ -68,6 +69,55 @@ RATE_HEADER = (
 )
 
 
+SPLIT_NAMES = {"calibration": "校准集", "test": "测试集"}
+# 模板两侧都是汉字；“AI”两边留空格，和本站其他中英混排一致。
+CLASS_NAMES = {"human": "人写", "ai": " AI "}
+FIXED_REASONS = {
+    "model id/revision is unknown": "不知道模型的确切版本（权重指纹缺失）",
+    "missing exact API confidence/length metadata": "缺少接口返回的充分度或长度信息",
+    "exact /api/detect pipeline provenance is unverified": "无法确认样本是按网站实际流程评分的",
+    "missing source URL/license provenance": "有样本缺少公开来源网址或许可说明",
+    "missing input fingerprints for duplicate/leakage checks": "有样本缺少文件指纹，无法检查重复和泄漏",
+    "model training overlap has not been excluded with evidence": (
+        "没有证据排除这些样本出现在检测模型的训练数据里"
+    ),
+    "no calibration threshold pair meets Wilson error constraints": (
+        "校准集上找不到同时满足误报、漏报上限的门槛"
+    ),
+    "independent test Wilson upper bounds do not meet error constraints": (
+        "用校准集选出的门槛，在独立测试集上没有达到误报、漏报上限"
+    ),
+}
+SPLIT_REASONS = (
+    (re.compile(r"^(calibration|test): missing (human|ai) class$"), "{split}缺少{label}样本"),
+    (
+        re.compile(r"^(calibration|test): fewer than (\d+) independent (human|ai) samples/groups$"),
+        "{split}的{label}独立样本/组少于 {n} 个",
+    ),
+    (
+        re.compile(
+            r"^(calibration|test): repeated (human|ai) versions are statistically correlated$"
+        ),
+        "{split}的{label}样本里有同一原稿的多个版本，彼此相关",
+    ),
+)
+
+
+def explain_reason(reason: str) -> str:
+    """把校准给出的英文原因翻成中文，原文放在后面方便检索；认不出的原样保留。"""
+    text = FIXED_REASONS.get(reason)
+    if text is None:
+        for pattern, template in SPLIT_REASONS:
+            match = pattern.match(reason)
+            if match:
+                groups = match.groups()
+                split, label = groups[0], groups[-1]
+                n = groups[1] if len(groups) == 3 else ""
+                text = template.format(split=SPLIT_NAMES[split], label=CLASS_NAMES[label], n=n)
+                break
+    return f"{text}（`{reason}`）" if text else f"`{reason}`"
+
+
 def _calibration_section(profile: dict) -> list[str]:
     policy = profile["policy"]
     out = [
@@ -102,7 +152,7 @@ def _calibration_section(profile: dict) -> list[str]:
             out.append(f"- 适用长度（人写/AI 样本实际范围）：{chars['min']}–{chars['max']} 字符")
         if item.get("reasons"):
             out.append("- 不能启用的原因：")
-            out += [f"  - `{reason}`" for reason in item["reasons"]]
+            out += [f"  - {explain_reason(reason)}" for reason in item["reasons"]]
         out.append("")
     return out
 
