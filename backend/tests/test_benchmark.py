@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.evaluation_stats import make_records, summarize
-from benchmark import load_manifest, main, run_api
+from benchmark import load_checkpoint, load_manifest, main, run_api, wait_for_models
 
 
 def test_counts_false_flags_and_misses_without_treating_mixed_as_binary():
@@ -322,3 +322,267 @@ def test_cli_prediction_replay_preserves_metadata_and_exports_only_safe_fields(
         and json.loads(output)["latency_ms"] == 10
     )
     assert json.loads(report_out.read_text(encoding="utf-8"))["overall"]["n"] == 1
+
+
+# ---- 续跑与等待模型 ----
+
+
+def _api_rows(tmp_path, n=3):
+    rows = []
+    for i in range(n):
+        path = tmp_path / f"e{i}.txt"
+        path.write_text(f"essay {i}", encoding="utf-8")
+        rows.append({"id": f"s{i}", "lang": "en", "_path": path})
+    return rows
+
+
+def _ok(revision="rev-1"):
+    return httpx.Response(
+        200,
+        json={
+            "score": 0.3,
+            "verdict": "low",
+            "model_id": "model",
+            "model_revision": revision,
+            "char_count": 900,
+            "word_count": 150,
+            "confidence": "medium",
+        },
+    )
+
+
+_REAL_CLIENT = httpx.Client  # 先存下来：同一个用例里可能要换两次 handler
+
+
+def _patch_client(monkeypatch, handler):
+    monkeypatch.setattr(
+        "httpx.Client",
+        lambda **kwargs: _REAL_CLIENT(transport=httpx.MockTransport(handler), **kwargs),
+    )
+
+
+def test_failed_run_keeps_progress_and_resume_scores_only_the_rest(tmp_path, monkeypatch):
+    rows = _api_rows(tmp_path)
+    checkpoint = tmp_path / "out" / "predictions.jsonl"
+    calls = []
+
+    def flaky(request):
+        calls.append(request)
+        return _ok() if len(calls) == 1 else httpx.Response(400, json={"error": "x"})
+
+    _patch_client(monkeypatch, flaky)
+    with pytest.raises(RuntimeError, match="s1: API HTTP 400"):
+        run_api(rows, "http://127.0.0.1:8000", checkpoint=checkpoint)
+    saved = [json.loads(line) for line in checkpoint.read_text(encoding="utf-8").splitlines()]
+    assert [p["id"] for p in saved] == ["s0"]
+
+    calls.clear()
+    _patch_client(monkeypatch, lambda request: calls.append(request) or _ok())
+    predictions = run_api(rows, "http://127.0.0.1:8000", checkpoint=checkpoint)
+    assert len(calls) == 2  # s0 不再重算
+    assert [p["id"] for p in predictions] == ["s0", "s1", "s2"]
+    lines = checkpoint.read_text(encoding="utf-8").splitlines()
+    assert sorted(json.loads(line)["id"] for line in lines) == ["s0", "s1", "s2"]
+
+
+def test_resume_refuses_a_different_model_revision(tmp_path, monkeypatch):
+    rows = _api_rows(tmp_path, 2)
+    checkpoint = tmp_path / "predictions.jsonl"
+    _patch_client(monkeypatch, lambda request: _ok("rev-1"))
+    run_api(rows[:1], "http://127.0.0.1:8000", checkpoint=checkpoint)
+    _patch_client(monkeypatch, lambda request: _ok("rev-2"))
+    with pytest.raises(RuntimeError, match="differs from the one in the checkpoint"):
+        run_api(rows, "http://127.0.0.1:8000", checkpoint=checkpoint)
+
+
+def test_checkpoint_drops_only_a_cut_off_last_line(tmp_path):
+    rows = _api_rows(tmp_path, 3)
+    good = json.dumps({"id": "s0", "score": 0.2, "verdict": "low"})
+    path = tmp_path / "predictions.jsonl"
+    path.write_text(good + '\n{"id": "s1", "sco', encoding="utf-8")
+    assert [p["id"] for p in load_checkpoint(path, rows)] == ["s0"]
+    path.write_text('{"id": "s1", "sco\n' + good + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="not valid JSON"):
+        load_checkpoint(path, rows)
+    path.write_text(json.dumps({"id": "other", "score": 0.2}) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="does not belong"):
+        load_checkpoint(path, rows)
+    path.write_text(good + "\n" + good + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate"):
+        load_checkpoint(path, rows)
+
+
+def test_cli_will_not_overwrite_saved_predictions_without_resume(tmp_path, monkeypatch):
+    (tmp_path / "essay.txt").write_text("sample essay", encoding="utf-8")
+    manifest = _manifest(
+        tmp_path,
+        [{"id": "h", "file": "essay.txt", "lang": "en", "label": "human", "source": "s"}],
+    )
+    saved = tmp_path / "predictions.jsonl"
+    saved.write_text('{"id": "h", "score": 0.1, "verdict": "low"}\n', encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "benchmark.py",
+            str(manifest),
+            "--predictions-out",
+            str(saved),
+            "--out",
+            str(tmp_path / "report.json"),
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+    assert saved.read_text(encoding="utf-8") == '{"id": "h", "score": 0.1, "verdict": "low"}\n'
+
+
+def test_wait_for_models_polls_until_the_needed_languages_load(monkeypatch):
+    states = iter(
+        [
+            {"models": {"en": False, "zh": False}, "loading": True},
+            {"models": {"en": True, "zh": False}, "loading": True},
+            {"models": {"en": True, "zh": True}, "loading": False},
+        ]
+    )
+    calls = []
+    _patch_client(
+        monkeypatch, lambda request: calls.append(request) or httpx.Response(200, json=next(states))
+    )
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    wait_for_models("http://127.0.0.1:8000", {"en", "zh"}, timeout_s=60)
+    assert len(calls) == 3 and calls[0].url.path == "/api/status"
+
+
+def test_wait_for_models_fails_fast_when_loading_ended_without_a_model(monkeypatch):
+    _patch_client(
+        monkeypatch,
+        lambda request: httpx.Response(
+            200, json={"models": {"en": True, "zh": False}, "loading": False}
+        ),
+    )
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="Model not available for: zh"):
+        wait_for_models("http://127.0.0.1:8000", {"en", "zh"}, timeout_s=60)
+
+
+def test_wait_for_models_times_out(monkeypatch):
+    _patch_client(
+        monkeypatch,
+        lambda request: httpx.Response(200, json={"models": {"en": False}, "loading": True}),
+    )
+    clock = iter([0.0, 0.0, 5.0, 11.0, 20.0])
+    monkeypatch.setattr("time.monotonic", lambda: next(clock))
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="still not ready after 10s: en"):
+        wait_for_models("http://127.0.0.1:8000", {"en"}, timeout_s=10)
+
+
+def test_api_error_shows_only_our_fixed_error_code(tmp_path, monkeypatch):
+    rows = _api_rows(tmp_path, 1)
+    _patch_client(
+        monkeypatch,
+        lambda request: httpx.Response(
+            400, json={"error": "too_short", "message": "SECRET essay text"}
+        ),
+    )
+    with pytest.raises(RuntimeError) as error:
+        run_api(rows, "http://127.0.0.1:8000")
+    assert str(error.value) == "s0: API HTTP 400 (too_short)"
+    _patch_client(
+        monkeypatch,
+        lambda request: httpx.Response(400, json={"error": "Contains SECRET text!"}),
+    )
+    with pytest.raises(RuntimeError) as error:
+        run_api(rows, "http://127.0.0.1:8000")
+    assert str(error.value) == "s0: API HTTP 400"
+
+
+def test_cli_stop_prints_how_many_were_saved_and_how_to_resume(tmp_path, monkeypatch, capsys):
+    (tmp_path / "a.txt").write_text("first essay", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("second essay", encoding="utf-8")
+    manifest = _manifest(
+        tmp_path,
+        [
+            {"id": "a", "file": "a.txt", "lang": "en", "label": "human", "source": "s"},
+            {"id": "b", "file": "b.txt", "lang": "en", "label": "ai", "source": "s"},
+        ],
+    )
+    calls = []
+    _patch_client(
+        monkeypatch,
+        lambda request: calls.append(1) or (_ok() if len(calls) == 1 else httpx.Response(503)),
+    )
+    saved = tmp_path / "predictions.jsonl"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "benchmark.py",
+            str(manifest),
+            "--predictions-out",
+            str(saved),
+            "--out",
+            str(tmp_path / "report.json"),
+        ],
+    )
+    with pytest.raises(SystemExit) as stop:
+        main()
+    message = str(stop.value)
+    assert message.startswith("Stopped: b: API HTTP 503")
+    assert "1 predictions are saved" in message and "--resume" in message
+
+
+def test_missing_model_revision_is_recorded_as_unknown_so_the_report_still_builds(
+    tmp_path, monkeypatch
+):
+    rows = _api_rows(tmp_path, 1)
+    response = _ok().json() | {"model_revision": None}
+    _patch_client(monkeypatch, lambda request: httpx.Response(200, json=response))
+    checkpoint = tmp_path / "predictions.jsonl"
+    predictions = run_api(rows, "http://127.0.0.1:8000", checkpoint=checkpoint)
+    assert predictions[0]["model_revision"] == "unknown"
+    # 旧版本写下的 null 也能续用
+    checkpoint.write_text(
+        json.dumps({"id": "s0", "score": 0.3, "verdict": "low", "model_revision": None}) + "\n",
+        encoding="utf-8",
+    )
+    assert load_checkpoint(checkpoint, rows)[0]["model_revision"] == "unknown"
+    report = summarize([{"id": "s0", "lang": "en", "label": "human", "source": "s"}], predictions)
+    assert report["records"][0]["model_revision"] == "unknown"
+
+
+def test_ctrl_c_keeps_progress_and_says_how_to_resume(tmp_path, monkeypatch):
+    for name in ("a", "b"):
+        (tmp_path / f"{name}.txt").write_text(f"essay {name}", encoding="utf-8")
+    manifest = _manifest(
+        tmp_path,
+        [
+            {"id": "a", "file": "a.txt", "lang": "en", "label": "human", "source": "s"},
+            {"id": "b", "file": "b.txt", "lang": "en", "label": "ai", "source": "s"},
+        ],
+    )
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+        return _ok()
+
+    _patch_client(monkeypatch, handler)
+    saved = tmp_path / "predictions.jsonl"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "benchmark.py",
+            str(manifest),
+            "--predictions-out",
+            str(saved),
+            "--out",
+            str(tmp_path / "report.json"),
+        ],
+    )
+    with pytest.raises(SystemExit) as stop:
+        main()
+    assert str(stop.value).startswith("Stopped: interrupted (Ctrl-C)")
+    assert "1 predictions are saved" in str(stop.value)
+    assert [json.loads(line)["id"] for line in saved.read_text().splitlines()] == ["a"]
