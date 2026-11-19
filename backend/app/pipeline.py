@@ -10,9 +10,9 @@ from app.extract import ExtractedText, extract_from_bytes
 from app.language import check_language
 from app.length import SENTENCE_REVIEW_MAX_CHARS, check_length, count_chars
 from app.markers import find_markers
+from app.model_artifacts import MODEL_IDS
 from app.paragraphs import prepare_scoring_text, split_paragraphs
 from app.rhythm import measure_rhythm
-from app.scoring import MODEL_IDS
 
 ScoreFn = Callable[[str, str], float]
 

@@ -10,7 +10,7 @@ docker compose --profile tools run --rm download-models   # 下载英文模型�
 docker compose up -d
 ```
 
-然后打开 <http://127.0.0.1:8000>，等页面显示“英文可用”再检测。中文模型在容器第一次启动时自动下载到同一个卷（`HF_HOME=/models/hf`），之后不再重复下载。看进度：`docker compose logs -f detector`。
+然后打开 <http://127.0.0.1:8000>，等页面显示“英文可用”再检测。中文模型在容器第一次启动时自动下载到同一个卷（`HF_HOME=/models/hf`），之后不再重复下载。启动时会校验固定版本的中英文模型；升级后如提示英文校验失败，重新运行上面的 `download-models`。看进度：`docker compose logs -f detector`。
 
 - 停止：`docker compose down`（权重保留在卷里）。
 - 连权重一起删：`docker compose down -v`。

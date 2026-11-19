@@ -4,7 +4,9 @@ uvicorn>=0.32.0
 python-multipart>=0.0.12
 python-docx>=1.2.0
 pypdf>=5.1.0
-huggingface_hub>=0.26.0
-modelscope>=1.20.0
-transformers>=4.45.0
-torch>=2.4.0
+huggingface-hub==2.4.0
+transformers==5.23.0
+tokenizers==0.23.3
+safetensors==0.8.0
+numpy==2.4.6
+-r requirements-torch.txt
