@@ -79,3 +79,28 @@ def test_duplicate_content_cannot_inflate_calibration_groups():
     rows = [record("a", split="calibration", group_id="first", input_sha256="a" * 64),
             record("b", split="test", group_id="second", input_sha256="a" * 64)]
     assert TestClient(app).post("/api/evaluation/analyze", json={"records": rows}).status_code == 400
+
+
+def test_import_and_export_carry_safe_authorship_fields():
+    provenance = {"author_names_sha256": "a" * 64, "first_version_at": "2026-08-01",
+                  "published_at": "2026-09-01T00:00:00Z", "authorship_evidence": "publication_claim",
+                  "ai_use_declaration": "none_found", "consent_reference": None}
+    client = TestClient(app)
+    response = client.post("/api/evaluation/manifest", json={"samples": [record(file="paper.txt", **provenance)]})
+    assert response.status_code == 200
+    assert {key: response.json()["samples"][0][key] for key in provenance} == provenance
+    response = client.post("/api/evaluation/analyze", json={"records": [record(**provenance)]})
+    assert response.status_code == 200
+    assert {key: response.json()["report"]["records"][0][key] for key in provenance} == provenance
+
+
+@pytest.mark.parametrize("patch", [
+    {"authorship_evidence": "consented_attestation"},
+    {"authorship_evidence": "consented_attestation", "consent_reference": " "},
+    {"first_version_at": "2026-02-30"}, {"published_at": "2026-09-01T12:00:00"},
+    {"author_names_sha256": "named author"}, {"ai_use_declaration": "unknown"},
+])
+def test_evaluation_import_validates_authorship_fields(patch):
+    client = TestClient(app)
+    assert client.post("/api/evaluation/manifest", json={"samples": [record(file="paper.txt", **patch)]}).status_code == 400
+    assert client.post("/api/evaluation/analyze", json={"records": [record(**patch)]}).status_code == 400
