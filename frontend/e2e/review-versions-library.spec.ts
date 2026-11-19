@@ -122,9 +122,12 @@ test("results use recorded edits for review without changing the score or verdic
   await page.locator('.input-panel input[type="file"]').setInputFiles(file("Class book swap.txt", first + "\n\n" + second));
   await page.getByRole("button",{name:"开始检测",exact:true}).click();
   const result = page.locator(".result");
-  const evidence = result.locator(".process-assessment");
+  const evidence = result.locator(".verdict-reasons + .process-assessment");
   await expect(evidence).toContainText("暂无过程证据");
   await expect(result.getByRole("heading",{name:"AI 写作倾向较高",exact:true})).toBeVisible();
+  await expect(result.locator(".result-score strong")).toHaveText("较高");
+  await expect(result.locator(".result-raw-score")).toHaveText("模型原始分：95.0%");
+  await expect(result.getByRole("heading",{name:"判定依据",exact:true})).toBeVisible();
   const original = await exported(page);
   const paragraph = result.locator("li.para").first();
   async function revise(text:string) {

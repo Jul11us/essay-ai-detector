@@ -107,6 +107,63 @@ def test_report_uses_allowlist_without_essay_text_or_input_paths():
     assert "SECRET TEXT" not in serialized and "private/input" not in serialized and "private-file" not in serialized
 
 
+def test_generation_provenance_and_breakdown_keep_binary_misses_separate():
+    rows = [
+        {"id": str(i), "lang": "en", "label": label, "source": "test", "generation_method": method}
+        for i, (label, method) in enumerate([
+            ("ai", "paraphrase_back_translation_llm"), ("ai", "paraphrase_dipper_llm"),
+            ("ai", "paraphrase_polish_llm"), ("human", "paraphrase_dipper_llm"),
+            ("mixed", "paraphrase_dipper_llm"), ("ai", "direct_prompt"),
+        ])
+    ]
+    provenance = {"source_key": "upstream-17", "attack_type": "paraphrase", "attack_method": "back_translation",
+                  "data_type": "paraphrase_back_translation_llm", "llm_type": "ChatGPT",
+                  "grade": "8", "prompt_name": "essay", "prompt_id": "prompt-1"}
+    rows[0].update(provenance, text="PRIVATE BODY", attack_text="PRIVATE ATTACK", source_text="PRIVATE SOURCE")
+    predictions = [{"id": str(i), "score": .5, "verdict": verdict}
+                   for i, verdict in enumerate(["low", "uncertain", "high", "low", "uncertain", "low"])]
+    report = summarize(rows, predictions)
+    assert all(report["records"][0][key] == value for key, value in provenance.items())
+    assert report["records"][0]["generation_method"] == "paraphrase_back_translation_llm"
+    assert "PRIVATE" not in json.dumps(report)
+    family = report["generation_families"]["paraphrase"]
+    assert family["n"] == 5
+    assert family["verdicts"] == {"low": 2, "uncertain": 2, "high": 1}
+    assert (family["ai_low_miss"]["count"], family["ai_low_miss"]["of"]) == (1, 3)
+    assert (family["ai_not_high_miss"]["count"], family["ai_not_high_miss"]["of"]) == (2, 3)
+    method = report["generation_methods"]["paraphrase_dipper_llm"]
+    assert method["labels"] == {"ai": 1, "human": 1, "mixed": 1}
+    assert method["ai_not_high_miss"]["rate"] == 1
+    assert report["generation_families"]["other"]["n"] == 1
+
+
+@pytest.mark.parametrize("method", ["back_translation", "dipper", "polish", "paraphrase_back_translation", "paraphrase_dipper", "paraphrase_polish"])
+def test_paraphrase_method_aliases(method):
+    report = summarize([{"id": "a", "lang": "en", "label": "ai", "source": "test", "generation_method": method}],
+                       [{"id": "a", "score": .1, "verdict": "low"}])
+    assert report["generation_families"]["paraphrase"]["n"] == 1
+
+
+def test_generation_breakdown_handles_legacy_humans_unknown_methods_and_empty_input():
+    rows = [{"id": "h", "lang": "en", "label": "human", "source": "test"},
+            {"id": "a", "lang": "en", "label": "ai", "source": "test", "generation_method": "future_attack"}]
+    report = summarize(rows, [{"id": "h", "score": .1, "verdict": "low"}, {"id": "a", "score": .9, "verdict": "high"}])
+    unknown = report["generation_methods"]["unspecified"]
+    assert unknown["verdicts"] == {"low": 1, "uncertain": 0, "high": 0}
+    assert unknown["ai_not_high_miss"] == {"count": 0, "of": 0, "rate": None, "wilson_ci": None}
+    assert "generation_method" not in report["records"][0]
+    assert report["generation_families"]["other"]["ai_not_high_miss"]["count"] == 0
+    with pytest.raises(ValueError, match="No samples"):
+        summarize([], [])
+
+
+@pytest.mark.parametrize("method", [None, 7, [], {}, "", "   "])
+def test_invalid_generation_method_is_rejected(method):
+    with pytest.raises(ValueError, match="Invalid generation_method"):
+        summarize([{"id": "a", "lang": "en", "label": "ai", "source": "test", "generation_method": method}],
+                  [{"id": "a", "score": .1, "verdict": "low"}])
+
+
 def test_api_calls_exact_endpoint_and_saves_safe_metadata(tmp_path, monkeypatch):
     data = b"sample essay"
     file = tmp_path / "essay.txt"

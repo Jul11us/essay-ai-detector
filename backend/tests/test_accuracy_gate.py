@@ -4,6 +4,7 @@ import json
 import pytest
 
 from accuracy_gate import compare, main, snapshot, table
+from benchmark import summarize
 
 
 def report():
@@ -70,6 +71,17 @@ def test_order_independent_and_counts_only():
     data["records"].reverse()
     assert snapshot(data) == baseline
     assert "records" not in baseline
+
+
+def test_generation_breakdowns_do_not_change_legacy_accuracy_snapshot():
+    old = report()
+    baseline = snapshot(old)
+    rows = [{**r, "_sha256": r["input_sha256"],
+             "generation_method": "paraphrase_back_translation_llm"} for r in old["records"]]
+    new = summarize(rows, [{**r, "score": .9 if r["verdict"] == "high" else .1} for r in old["records"]])
+    assert new["generation_families"]["paraphrase"]["n"] == len(old["records"])
+    assert snapshot(new) == baseline
+    assert compare(snapshot(new), baseline) == ([], [])
 
 
 def test_chinese_group_misses_are_gated_independently():
