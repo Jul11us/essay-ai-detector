@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { replaceParagraph } from "./aggregate";
 import { assessProcess } from "./processEvidence";
 import type { BilingualOk, DetectOk, Verdict } from "./types";
 import { appendVersion, diffText, ensureVersions, recordRecheck } from "./versions";
@@ -79,6 +80,21 @@ describe("assessProcess", () => {
     const revised = recordRecheck(rewritten, chinese(second.replace("登山", "上坡")), "第 1 段重测");
     expect(diffText(first, second).granular).toBe(false);
     expect(assessProcess(revised, "zh")).toEqual({ kind: "unmeasured", assessment: "context", count: 2 });
+  });
+
+  it.each([true, undefined])("does not count a formatting-only recheck at a scoring split (join: %s)", (join) => {
+    const prefix = "we followed the river with our guide ".repeat(30).trim();
+    const ending = "waterfall follows the path with loose stones";
+    const initial = ensureVersions(doc(prefix + " " + ending));
+    const split = [prefix.padEnd(1196) + ending.slice(0, 4), ending.slice(4)];
+    const formatted = {
+      ...doc(split.join("\n\n")),
+      paragraphs: split.map((text, index) => ({ ...doc(text).paragraphs[0], index, joins_previous: index === 1 ? join : false })),
+    };
+    const rescored = recordRecheck(initial, formatted, "第 1 段重测");
+    const corrected = recordRecheck(rescored, replaceParagraph(rescored, 1, doc(split[1].replace("loose", "small"))), "第 2 段重测");
+    expect(corrected.paragraphs[1].joins_previous).toBe(join);
+    expect(assessProcess(corrected, "en")).toEqual({ kind: "none" });
   });
 
   it("does not count gaps, snapshot-only legacy history, missing full text, or restores", () => {

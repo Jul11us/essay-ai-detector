@@ -30,6 +30,7 @@ export type ParagraphHit = {
   excerpt: string;
   /** 这一评分单元的全文。单段重测和逐句定位都用它，摘录只留给复制结果。 */
   text?: string;
+  joins_previous?: boolean;
   score: number;
   verdict: Verdict;
   /** 去空白后的字符数，也就是该段在全文里的权重。 */

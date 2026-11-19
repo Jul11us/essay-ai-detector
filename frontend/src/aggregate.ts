@@ -170,14 +170,16 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
 
 /** 用单段检测的返回替换原文里的一段，并按各段字数把总分重算一遍。 */
 export function replaceParagraph(doc: DetectOk, index: number, piece: DetectOk): DetectOk {
-  const incoming = piece.paragraphs.map((p) => ({ ...p, sentences: null }));
+  const prior = doc.paragraphs.find((p) => p.index === index);
+  const incoming = piece.paragraphs.map((p, i) => ({
+    ...p, joins_previous: i === 0 ? prior?.joins_previous : p.joins_previous, sentences: null,
+  }));
   const paragraphs = [
     ...doc.paragraphs.filter((p) => p.index < index),
     ...incoming,
     ...doc.paragraphs.filter((p) => p.index > index),
   ].map((p, i) => ({ ...p, index: i }));
   const next = applyStats(doc, paragraphs);
-  const prior = doc.paragraphs.find((p) => p.index === index);
   const edited = incoming.map((p) => p.text || p.excerpt).join("\n\n") !== (prior?.text || prior?.excerpt);
   if (edited && next.detection_scope && !next.detection_scope.note.includes("正文已在复核中修改")) {
     next.detection_scope = { ...next.detection_scope, note: next.detection_scope.note + " 正文已在复核中修改并重测；以上段落和字符数量记录原文件的选择范围，当前分数对应报告中的修改后正文。" };

@@ -9,7 +9,7 @@ export type ProcessEvidence = { kind: "none" }
   | { kind: "revisions"; assessment: Assessment; count: number }
   | { kind: "mixed" | "unmeasured"; assessment: "context"; count: number };
 
-type Manuscript = { text: string; compact: string; wording: string };
+type Manuscript = { text: string; compact: string; wording: string; unknownJoins: Set<number> };
 
 function section(result: Outcome, lang: ScoreLang) {
   const part = isBilingual(result) ? result[lang] : result;
@@ -21,12 +21,33 @@ const chars = (text: string) => Array.from(withoutSpace(text)).length;
 
 function manuscript(result: ReturnType<typeof section>): Manuscript | null {
   if (!result?.paragraphs.length || result.paragraphs.some((p) => !p.text)) return null;
-  const text = result.paragraphs.map((p) => p.text).join("\n\n");
+  const parts: string[] = [];
+  const unknownJoins = new Set<number>();
+  let offset = 0;
+  for (const [i, paragraph] of result.paragraphs.entries()) {
+    if (i && paragraph.joins_previous === undefined) unknownJoins.add(offset);
+    const text = paragraph.text!;
+    parts.push((i && !paragraph.joins_previous ? "\n\n" : "") + text);
+    offset += withoutSpace(text).length;
+  }
+  const text = parts.join("");
   const compact = withoutSpace(text);
   const wording = result.lang === "en"
     ? text.replace(/\s+/gu, " ").replace(/(?<![\p{L}\p{M}\p{N}]) | (?![\p{L}\p{M}\p{N}])/gu, "")
     : compact;
-  return { text, compact, wording };
+  return { text, compact, wording, unknownJoins };
+}
+
+function onlyUnknownJoinsDiffer(before: Manuscript, after: Manuscript) {
+  if (before.compact !== after.compact || (!before.unknownJoins.size && !after.unknownJoins.size)) return false;
+  const ignoreUnknownJoins = (wording: string) => {
+    let spaces = 0;
+    return wording.replace(/ /gu, (_space, index: number) => {
+      const offset = index - spaces++;
+      return before.unknownJoins.has(offset) || after.unknownJoins.has(offset) ? "" : " ";
+    });
+  };
+  return ignoreUnknownJoins(before.wording) === ignoreUnknownJoins(after.wording);
 }
 
 function changedSpan(before: string, after: string) {
@@ -71,7 +92,7 @@ export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence
     const before = manuscript(section(versions[i - 1].result, lang));
     if (before === null || after === null) break;
     if (before.wording !== after.wording) {
-      if (event.kind !== "recheck") break;
+      if (event.kind !== "recheck" || onlyUnknownJoinsDiffer(before, after)) break;
       const changes = measureChanges(before, after);
       if (changes) {
         const { added, removed, contiguousAddition } = changes;
