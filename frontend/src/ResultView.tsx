@@ -4,8 +4,8 @@ import { CompositionPanel } from "./CompositionPanel";
 import { suspectKey, topSuspects, type Suspect } from "./aggregate";
 import { composition } from "./composition";
 import {
-  AI_RATE_LABEL,
-  AI_RATE_NOTE,
+  RAW_SCORE_NOTE,
+  verdictReasons,
   CONF_LABEL,
   SHORT_PARAGRAPH_CHARS,
   formatPercent,
@@ -86,6 +86,7 @@ export function ResultCard({
     }
   }
   const percent = formatPercent(data.score);
+  const verdict = verdictReasons(data);
   const shortParas = data.paragraphs.filter(isShortParagraph);
   const mainParas = data.paragraphs.filter((p) => !isShortParagraph(p));
   const collapseShort = mainParas.length > 0 && shortParas.length > 0;
@@ -115,11 +116,16 @@ export function ResultCard({
             : "请先看标记的原句和上下文。单个分数不能证明文字来源。"}</p>
           {data.mixed_variance && <p className="mix">各段差异较大，建议逐段查看。</p>}
         </div>
-        <div className={`result-score ${data.verdict}`} role="group" aria-label={`全文${AI_RATE_LABEL}：${percent}%`}>
-          <span className="result-score-label">全文 AI 率 <span>模型估计</span></span>
-          <strong>{percent}%</strong>
-          <small>{AI_RATE_NOTE}</small>
+        <div className={`result-score ${data.verdict}`} role="group" aria-label={`全文判定：${verdict.label}；模型原始分：${percent}%；${RAW_SCORE_NOTE}`}>
+          <span className="result-score-label">全文判定</span>
+          <strong>{verdict.label}</strong>
+          <span className="result-raw-score">模型原始分：{percent}%</span>
+          <small>{RAW_SCORE_NOTE}</small>
         </div>
+      </div>
+      <div className="verdict-reasons">
+        <h3>判定依据</h3>
+        <ul>{verdict.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
       </div>
       <div className="result-actions">
         <WordReportButton data={data} />

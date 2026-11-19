@@ -1,6 +1,6 @@
 import type { BilingualOk, DetectOk, Rhythm } from "./types";
 import { isSectionErr } from "./types";
-import { AI_RATE_LABEL, AI_RATE_NOTE, CONF_LABEL, VERDICT_LABEL, formatPercent, isShortParagraph } from "./copy";
+import { RAW_SCORE_NOTE, verdictReasons, CONF_LABEL, VERDICT_LABEL, formatPercent, isShortParagraph } from "./copy";
 import { suspectKey, topSuspects } from "./aggregate";
 import { composition, spanPlace } from "./composition";
 import { downloadText } from "./download";
@@ -86,8 +86,10 @@ function sectionHtml(data: DetectOk): string {
     ? `<h2>句长波动 · ${esc(data.rhythm.label)}</h2><p>${esc(data.rhythm.note)}</p>${rhythmSvg(data.rhythm)}`
     : "";
   return `
-    <p class="score">${AI_RATE_LABEL} ${formatPercent(data.score)}% · ${VERDICT_LABEL[data.verdict]} · 文本充分度 ${CONF_LABEL[data.confidence]}</p>
-    <p>${AI_RATE_NOTE}</p>
+    <p class="score">全文判定：${verdictReasons(data).label}</p>
+    <p>模型原始分：${formatPercent(data.score)}% · 文本充分度 ${CONF_LABEL[data.confidence]}</p>
+    <p>${RAW_SCORE_NOTE}</p>
+    <h2>判定依据</h2><ul>${verdictReasons(data).reasons.map((reason) => `<li>${esc(reason)}</li>`).join("")}</ul>
     ${data.detection_scope ? `<h2>实际检测范围</h2><p>${esc(data.detection_scope.source_name)}：选中 ${data.detection_scope.selected_blocks} / ${data.detection_scope.total_blocks} 段，${data.detection_scope.selected_chars} / ${data.detection_scope.total_chars} 个非空白字符。</p><p>${esc(data.detection_scope.note)}</p>${data.detection_scope.excluded.map((item) => `<details><summary>${esc(item.reason)}</summary><p>${esc(item.text)}</p></details>`).join("")}` : ""}
     ${compoHtml}
     <p>文本充分度只由长度和段落分数计算。</p>

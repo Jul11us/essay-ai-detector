@@ -214,6 +214,10 @@ summary { cursor: pointer; }
 .result-score-label > span { font-size: 9px; color: var(--muted); border: 1px solid #cdd5e1; border-radius: 3px; padding: 1px 5px; font-weight: 400; }
 .result-score strong { font: 52px/1.2 var(--number-font); letter-spacing: -.04em; color: var(--score-color); margin: 9px 0; font-variant-numeric: tabular-nums; }
 .result-score small { font-size: 10px; color: var(--muted); line-height: 1.7; }
+.result-raw-score { font-size: 13px; margin-bottom: 6px; }
+.verdict-reasons { margin: 16px 0; font-size: 12px; line-height: 1.7; color: var(--muted); }
+.verdict-reasons h3 { font-size: 13px; color: var(--ink); margin: 0; }
+.verdict-reasons ul { margin: 6px 0; padding-left: 20px; }
 .result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 23px; }
 .result > .result-actions { padding: 14px 36px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .word-export { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
