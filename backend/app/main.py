@@ -25,6 +25,7 @@ from app.evaluation import AnalyzeRequest, ManifestRequest, analyze_predictions,
 from app.word_report import WordRequest, build_word_report
 from app.static import mount_frontend
 from app.document_scope import document_blocks, scoped_document, MAX_SCOPE_BLOCKS, MAX_SCOPE_CHARS
+from calibration import ZH_GENRES
 
 hub = ModelHub()
 
@@ -136,7 +137,7 @@ async def detect_error_handler(request, exc: DetectError):
     )
 
 
-def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=None, fingerprint=None):
+def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=None, fingerprint=None, genre=None):
     score = cancellable(hub.score, cancel)
     extracted, coverage = None, None
     if file_bytes is not None:
@@ -147,6 +148,7 @@ def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=
         lang, text, filename, file_bytes, score, length_floor=floor,
         model_revision=hub.revisions.get(lang),
         calibration_scope="paragraph" if floor is not None else "document",
+        genre=genre,
         extracted_override=extracted,
     )
     if coverage is not None:
@@ -236,6 +238,7 @@ async def detect(request: Request):
     en = None
     zh = None
     scope = None
+    genre = None
     selection, fingerprint = None, None
     if "multipart/form-data" in ctype:
         form = await request.form()
@@ -243,6 +246,8 @@ async def detect(request: Request):
         text = _str_field(form, "text")
         en = _str_field(form, "en")
         zh = _str_field(form, "zh")
+        scope = _str_field(form, "scope")
+        genre = form.get("genre")
         fingerprint = _str_field(form, "source_sha256")
         if "selection" in form:
             try:
@@ -264,9 +269,12 @@ async def detect(request: Request):
         en = _str_field(data, "en")
         zh = _str_field(data, "zh")
         scope = _str_field(data, "scope")
+        genre = data.get("genre")
         selection = data.get("selection")
     # 先校验语言再问模型：否则 lang=fr 且模型未加载时会返回 503 而不是 400。
     lang = require_lang(lang)
+    if genre is not None and (genre not in ZH_GENRES or lang != "zh" or scope == "paragraph" or selection is not None):
+        raise DetectError("invalid_genre")
     hub.assert_ready(lang)
     if lang == "bi":
         return await run_until_disconnect(
@@ -275,7 +283,7 @@ async def detect(request: Request):
     # 单段重测不能套整篇的 200 字符下限，否则改一句就被拒。
     floor = SECTION_MIN_CHARS if scope == "paragraph" else None
     return await run_until_disconnect(
-        request, _detect_document, lang, text, filename, file_bytes, floor, selection, fingerprint
+        request, _detect_document, lang, text, filename, file_bytes, floor, selection, fingerprint, genre
     )
 
 

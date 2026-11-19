@@ -5,13 +5,9 @@ import json
 import math
 import os
 import re
-from functools import lru_cache
 from pathlib import Path
 
-from calibration import wilson_interval
-
-DEFAULT_LOW = 0.40
-DEFAULT_HIGH = 0.75
+from calibration import DEFAULT_HIGH, DEFAULT_LOW, ZH_GENRES, wilson_interval
 
 
 def _reject_constant(value: str):
@@ -25,12 +21,17 @@ def _finite_float(value: str) -> float:
     return number
 
 
-@lru_cache(maxsize=4)
-def _read_profile(path: str, mtime_ns: int, size: int) -> dict:
-    if size > 2 * 1024 * 1024:
+def _read_profile(path: Path) -> dict:
+    limit = 2 * 1024 * 1024
+    with path.open("rb") as stream:
+        data = stream.read(limit + 1)
+    if len(data) > limit:
         raise ValueError("Profile too large")
-    profile = json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=_reject_constant, parse_float=_finite_float)
-    if not isinstance(profile, dict) or type(profile.get("schema_version")) is not int or profile.get("schema_version") != 1:
+    profile = json.loads(data.decode("utf-8"), parse_constant=_reject_constant, parse_float=_finite_float)
+    if not isinstance(profile, dict) or type(profile.get("schema_version")) is not int:
+        raise ValueError("Invalid profile schema")
+    schema, genre = profile["schema_version"], profile.get("genre")
+    if not ((schema == 1 and genre is None) or (schema == 2 and genre in ZH_GENRES)):
         raise ValueError("Invalid profile schema")
     if profile.get("evaluation_unit") != "document":
         raise ValueError("Only document-level profiles are supported")
@@ -80,7 +81,7 @@ def _verify_validation(profile: dict, item: dict) -> None:
 
 def resolve_calibration(
     lang: str, model_id: str, revision: str | None, char_count: int,
-    *, scope: str = "document",
+    *, scope: str = "document", genre: str | None = None,
 ) -> dict:
     decision = {
         "status": "default", "applied": False,
@@ -88,14 +89,21 @@ def resolve_calibration(
         "evaluation_unit": "document",
         "note": "尚未启用独立测试通过的整篇阈值；当前使用默认展示门槛。段落和句子着色尚未校准。",
     }
-    configured = os.environ.get("DETECTOR_CALIBRATION_PATH")
+    if genre is not None:
+        decision["genre"] = genre
+        if genre not in ZH_GENRES or lang != "zh" or scope != "document":
+            return decision
+        configured = os.environ.get(f"DETECTOR_ZH_{genre.upper()}_CALIBRATION_PATH")
+        decision["note"] = "尚未启用此中文文体的整篇阈值；当前使用默认展示门槛。"
+    else:
+        configured = os.environ.get("DETECTOR_CALIBRATION_PATH")
     if not configured:
         return decision
     defaults = decision.copy()
     try:
-        path = Path(configured).resolve()
-        stat = path.stat()
-        profile = _read_profile(str(path), stat.st_mtime_ns, stat.st_size)
+        profile = _read_profile(Path(configured))
+        if profile.get("genre") != genre:
+            raise ValueError("Calibration genre mismatch")
         item = profile["languages"].get(lang)
         if not isinstance(item, dict):
             decision["note"] = "校准文件没有此语言的数据；当前使用默认展示门槛。"
@@ -109,6 +117,8 @@ def resolve_calibration(
             and math.isfinite(low) and math.isfinite(high) and 0 <= low < high <= 1
         ):
             raise ValueError("Invalid thresholds")
+        if status == "validated" and genre is not None and (low != DEFAULT_LOW or high < DEFAULT_HIGH):
+            raise ValueError("Genre profiles must preserve the low boundary and cannot lower the high boundary")
         decision.update({
             "status": status,
             "profile_version": profile.get("profile_version"),
@@ -119,6 +129,8 @@ def resolve_calibration(
         extent_info = item.get("applicability", {})
         if not isinstance(extent_info, dict) or not isinstance(item.get("counts", {}), dict):
             raise ValueError("Invalid metadata")
+        if genre is not None and extent_info.get("domains") != [genre]:
+            raise ValueError("Calibration has missing or mismatched genre evidence")
         for split_counts in item.get("counts", {}).values():
             if not isinstance(split_counts, dict):
                 raise ValueError("Invalid counts metadata")
