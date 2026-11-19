@@ -53,6 +53,26 @@ API 只允许 `http://127.0.0.1` 或 `http://localhost`，禁用代理环境变�
 
 时延是客户端一次完整请求的耗时，包含上传、提取、预处理和推理，排除服务器启动；报告给出均值、中位数和 P95。重放报告保留原请求的时延。不同设备、文本长度、冷启动情况不能混作性能承诺。
 
+## CI 固定样本回归门禁
+
+每次 PR 和 main push 都运行真实 CPU 模型与 `pytest -m golden`。CI 下载固定修订并校验 SHA-256；权重缓存键包含 `model_artifacts.py`（修订与校验和）。必须等待 `/api/status` 的 `models.en`、`models.zh` 同时为 true，不能只检查 `phase: ready`。
+
+HC3 使用 seed `20261002`、每语言 50 对完整回答（50 人写 + 50 AI），不生成混合稿；沿用上述来源和局限，不代表通用作文准确率。样本文本每次下载到 git-ignored 目录，不能提交。`backend/tests/accuracy_baseline.json` 只保存样本身份/内容哈希汇总、模型指纹和计数。报告只含 benchmark 白名单元数据、分数与计数，不含原文，作为 CI artifact 上传；门禁表写入 Actions summary。
+
+门禁逐语言比较：人写判 `high` 为 false flag；AI 判 **非 high（包含 uncertain）** 为 miss，与报告的 `ai_low_miss` 不同。不确定人写/AI 和低充分度 abstain 另列（可能重叠，不能相加）。固定常量 `accuracy_gate.TOLERANCE = 1` 允许每语言每指标最多增加 1 份，容纳跨机器浮点漂移；改善通过并提示更新基线。样本或模型指纹变化必须人工审核后重新录制，不可静默放行。
+
+在已安装锁定依赖、真实权重且双模型已加载的本机，从仓库根目录运行：
+
+```bash
+python scripts/prepare_benchmark.py --pairs-per-language 50 --mixed-per-language 0 --seed 20261002 --out experiments/benchmark-private/accuracy-ci
+python backend/benchmark.py experiments/benchmark-private/accuracy-ci/manifest.jsonl --out experiments/benchmark-private/accuracy-ci/report.json
+python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report.json --record
+# 再次独立运行 benchmark 后验证（不是重放旧预测）
+python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report.json
+```
+
+重新录制前确认变化有意且已评审；提交 counts-only 基线 diff，不提交语料或原始文本。依赖/分段/阈值变化造成的退化也必须先调查，不应仅为变绿覆盖基线。
+
 ## 校准与独立验证
 
 默认策略是每个语言、每个 split 至少 30 个独立组的人写稿和 30 个独立组的 AI 稿，95% Wilson 区间；误报、漏报的上界均不得超过 20%。可用 `--min-samples-per-class`、`--confidence-level`、`--max-false-positive-rate`、`--max-false-negative-rate` 显式配置，策略随结果保存，不能隐藏为得出好看的数字而放宽过的约束。

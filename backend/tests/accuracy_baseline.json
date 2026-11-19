@@ -1,0 +1,40 @@
+{
+  "languages": {
+    "en": {
+      "abstain": 52,
+      "ai": 50,
+      "ai_uncertain": 21,
+      "false_flags": 0,
+      "human": 50,
+      "human_uncertain": 3,
+      "misses": 23,
+      "n": 100
+    },
+    "zh": {
+      "abstain": 98,
+      "ai": 50,
+      "ai_uncertain": 50,
+      "false_flags": 0,
+      "human": 50,
+      "human_uncertain": 6,
+      "misses": 50,
+      "n": 100
+    }
+  },
+  "models": {
+    "en": {
+      "model_id": "ShantanuT01/vanguard-ai-text-detector",
+      "model_revision": "sha256:713c8350aab03818a6712c46d6dbc64437fd9a18267791617b43986c08027d82"
+    },
+    "zh": {
+      "model_id": "yuchuantian/AIGC_detector_zhv3",
+      "model_revision": "sha256:280c211bdf3d03554b891f69c04a2f3865062c910f2d8fadbc3a31cd8ba0e1c0"
+    }
+  },
+  "pinned_model_commits": {
+    "en": "823061be63b90f2b42f64ac1e1f82772e872533b",
+    "zh": "47695ff451b32c225dd938f4f478f7fdc6aa6bb0"
+  },
+  "sample_fingerprint": "088bcdb6811106f5db442d707e5ad448be311a78159eb2af50674e1d05228fe2",
+  "schema_version": 1
+}
