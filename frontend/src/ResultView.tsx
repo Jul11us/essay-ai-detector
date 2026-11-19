@@ -21,6 +21,7 @@ import { ExportMenu } from "./ExportMenu";
 import type { DetectOk, SentenceReview } from "./types";
 import { ScopeSummary } from "./ScopeSelector";
 import { ReviewSidebar, focusSentence, reviewItems, type ReviewTarget } from "./ReviewSidebar";
+import type { ProcessEvidence } from "./processEvidence";
 
 export { Compare } from "./Compare";
 
@@ -48,8 +49,31 @@ function SuspectList({ lang, suspects }: { lang: string; suspects: Suspect[] }) 
   );
 }
 
+function ProcessAssessment({ evidence }: { evidence: ProcessEvidence }) {
+  if (evidence.kind === "none") return <div className="process-assessment">
+    <h3>写作过程辅助评估：暂无过程证据</h3>
+    <p>没有足够的留档可核对正文变化。记录缺失不代表稿件没有修改过。</p>
+  </div>;
+
+  const label = {
+    supports: "与较高档信号一致，仍需人工复核",
+    diverges: "与较高档信号不一致，建议人工复核",
+    review: "虽为较低档，建议核对大段新增内容",
+    context: "提供复核线索，不改变分档",
+  }[evidence.assessment];
+  const reason = evidence.kind === "bulk"
+    ? `最近一次有文字变化的重测中新增了一整块文字，约占当前正文的 ${Math.round(evidence.share * 100)}%。`
+    : `当前稿件可核对到 ${evidence.count} 次修改重测；${evidence.kind === "mixed" ? "其中有大幅改动，不能判断写作是逐步完成还是集中完成。" : "正文分多次修改，单看最终分数无法反映这些变化。"}`;
+  return <div className="process-assessment">
+    <h3>写作过程辅助评估：{label}</h3>
+    <p>{reason}</p>
+    <p>只依据本机留档，不记录键盘输入或外部写作。大段新增也可能是从其他编辑器转入，不能据此判断作者或文字来源；模型分数和分档不变。</p>
+  </div>;
+}
+
 export function ResultCard({
   data,
+  processEvidence,
   copied,
   onCopy,
   onSaveVersion,
@@ -63,6 +87,7 @@ export function ResultCard({
   onReview,
 }: {
   data: DetectOk;
+  processEvidence: ProcessEvidence;
   copied: boolean;
   onCopy: (data: DetectOk) => void;
   onSaveVersion: () => void;
@@ -120,6 +145,7 @@ export function ResultCard({
           <strong>{percent}%</strong>
           <small>{AI_RATE_NOTE}</small>
         </div>
+        <ProcessAssessment evidence={processEvidence} />
       </div>
       <div className="result-actions">
         <WordReportButton data={data} />

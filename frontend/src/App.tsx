@@ -3,6 +3,7 @@ import { BatchPanel } from "./BatchPanel";
 import { BilingualResult } from "./BilingualResult";
 import { InputPanel } from "./InputPanel";
 import { ResultCard } from "./ResultView";
+import { assessProcess } from "./processEvidence";
 import { VersionPanel } from "./VersionPanel";
 import type { Side } from "./aggregate";
 import { canSubmit } from "./copy";
@@ -186,6 +187,7 @@ export default function App() {
   function cardProps(side: Side, data: DetectOk) {
     return {
       data,
+      processEvidence: assessProcess(result ?? data, data.lang),
       copied: detector.copied === data.lang,
       onCopy: detector.copy,
       active: view === "detect",

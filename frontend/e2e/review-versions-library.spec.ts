@@ -114,6 +114,43 @@ test("versions retain text changes, scores and reviews across refresh and restor
   await page.setViewportSize({width:360,height:900}); await fits(page); await accessible(page);
 });
 
+test("results use recorded edits for review without changing the score or verdict", async ({page}) => {
+  const first = "Our class set up a swap table for books in the school library. We asked students to bring books they had finished and to leave a short note about each book. Furthermore, the librarian helped us keep the shelves tidy when the table became crowded.";
+  const second = "At the end of the week, we counted the books that were left and asked everyone how they had found something to read. Some students picked a book because of a friend's note. Furthermore, we put the remaining books on a small shelf beside the library entrance.";
+  await page.setViewportSize({width:1440,height:1000}); await ready(page);
+  await page.getByRole("button",{name:"英文",exact:true}).click();
+  await page.locator('.input-panel input[type="file"]').setInputFiles(file("Class book swap.txt", first + "\n\n" + second));
+  await page.getByRole("button",{name:"开始检测",exact:true}).click();
+  const result = page.locator(".result");
+  const evidence = result.locator(".process-assessment");
+  await expect(evidence).toContainText("暂无过程证据");
+  await expect(result.getByRole("heading",{name:"AI 写作倾向较高",exact:true})).toBeVisible();
+  const original = await exported(page);
+  const paragraph = result.locator("li.para").first();
+  async function revise(text:string) {
+    await paragraph.getByRole("button",{name:"在此修改并重测本段"}).click();
+    await paragraph.getByLabel("修改第 1 段").fill(text);
+    await paragraph.getByRole("button",{name:"重测这一段",exact:true}).click();
+    await expect(paragraph.getByRole("button",{name:"在此修改并重测本段"})).toBeVisible();
+  }
+  const draft = first.replace("books they had finished", "one book they would recommend to a classmate");
+  await revise(draft);
+  await expect(evidence).toContainText("暂无过程证据");
+  await revise(draft.replace("when the table became crowded", "during the rush at lunchtime"));
+  await expect(evidence).toContainText("与较高档信号不一致，建议人工复核");
+  await expect(evidence).toContainText("2 次修改重测");
+  const revised = await exported(page);
+  expect(revised.score).toBe(original.score);
+  expect(revised.verdict).toBe(original.verdict);
+  await accessible(page); await fits(page);
+  await result.locator(".result-heading").screenshot({path:test.info().outputPath("process-evidence-desktop.png")});
+  await tasks(page); await page.reload(); await tasks(page);
+  await page.getByRole("button",{name:"打开结果",exact:true}).click();
+  await expect(evidence).toContainText("2 次修改重测");
+  await page.setViewportSize({width:360,height:900}); await fits(page);
+  await result.locator(".result-heading").screenshot({path:test.info().outputPath("process-evidence-mobile.png")});
+});
+
 test("bilingual version comparison isolates language scores and restores the full saved document",async({page})=>{
   await ready(page); await page.getByRole("button",{name:"中英混合演示",exact:true}).click(); await page.getByRole("button",{name:"开始检测",exact:true}).click();
   await expect(page.getByText("检测结果 · 中文",{exact:true})).toBeVisible();
