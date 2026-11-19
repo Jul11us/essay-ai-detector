@@ -47,6 +47,18 @@ describe("assessProcess", () => {
     expect(assessProcess(second, "en")).toEqual({ kind: "revisions", count: 2, assessment: "diverges" });
   });
 
+  it("detects a large append when the recheck packs sentences into new paragraphs", () => {
+    const old = "The survey team returned to the old bridge to compare its condition with sketches made the year before.";
+    const added = "A second group followed the river south to look for other places where the banks had changed.";
+    const initial = ensureVersions(doc(Array(3).fill(old).join(" ")));
+    const packed = [old.repeat(3) + added.repeat(9), added.repeat(4)];
+    const result = recordRecheck(initial, {
+      ...doc(packed.join("\n\n")),
+      paragraphs: packed.map((text, index) => ({ ...doc(text).paragraphs[0], index })),
+    }, "第 1 段重测");
+    expect(assessProcess(result, "en")).toEqual({ kind: "bulk", share: expect.closeTo(.795, 3), assessment: "supports" });
+  });
+
   it("does not count gaps, snapshot-only legacy history, missing full text, or restores", () => {
     const original = ensureVersions(doc(body));
     const revised = recheck(original, body + addition);
