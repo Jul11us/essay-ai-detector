@@ -41,6 +41,10 @@ API 只允许 `http://127.0.0.1` 或 `http://localhost`，禁用代理环境变�
 
 报告给出总体，以及按语言、处理后字符长度、作者来源组别、split 和交叉分组的计数。字符长度分为 `<400`、`400–1499`、`≥1500`，与充分度长度门槛对应。未知长度单列，不猜测原稿长度。
 
+manifest 可补充 `generation_method`（非空字符串）；报告记录保留它以及白名单中的 `source_key`、`attack_type`、`attack_method`、`data_type`、`llm_type`、`grade`、`prompt_name`、`prompt_id` 等来源信息，不复制任意 `attack_*` / `source_*` 字段或正文。新增 `generation_methods` 按原始方法分组，`generation_families` 将回译、DIPPER、polish 的 `paraphrase_*_llm`、`paraphrase_*` 及短名归为 `paraphrase`，其他已标注方法归为 `other`，缺失方法归为 `unspecified`，不从文本或文件名推断攻击。
+
+这两种分组保留原有计数，并增加 `verdicts` 的 low/uncertain/high 零填充计数和 `ai_not_high_miss`（AI 稿判非 high / AI 样本数）；原有 `ai_low_miss` 仍仅计 AI-low。混合稿和人写稿不进入 AI 漏报分母。新增字段不改变既有总体字段或 CI 门禁，旧 manifest、预测与报告仍兼容。候选规则及未上线原因见[英文释义改写鲁棒性评测](paraphrase-evaluation.md)。
+
 | 指标 | 分子 / 分母 | 意义 |
 | --- | --- | --- |
 | `human_high_false_flag` | 人写稿判较高 / 人写样本数 | 误报 |
