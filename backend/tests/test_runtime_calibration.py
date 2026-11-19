@@ -8,8 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import calibration
-from app.scoring import MODEL_IDS
 from app.calibration_fit import wilson_interval
+from app.model_artifacts import MODEL_IDS
 
 REVISION = "sha256:" + "a" * 64
 

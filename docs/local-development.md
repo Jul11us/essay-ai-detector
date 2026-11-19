@@ -25,7 +25,9 @@ macOS / Linux 可用 `scripts/dev.sh` 一键启动前后端（Ctrl-C 停止）�
 
 要跑测试，把上面的 `requirements.txt` 换成 `backend\requirements-dev.txt`（多装 pytest 和 httpx）。
 
-英文模型默认放在 `experiments/models/vanguard`，也可用 `VANGUARD_MODEL_PATH` 指定。中文模型由后端首次加载时下载。只关闭浏览器并不会停止模型服务；请用 `停止.bat`。
+英文模型默认放在 `experiments/models/vanguard`，也可用 `VANGUARD_MODEL_PATH` 指定。中文模型由后端首次加载时下载，可用 `ZH_MODEL_PATH` 指向同一版本的离线副本。两个模型都固定上游提交并核对权重、配置和分词文件；不匹配不会加载。升级时重新安装依赖并运行 `experiments/download_model.py`，它会替换不匹配的英文文件。中文缓存损坏时，移除损坏的模型缓存并重启，或指定完整的离线副本。只关闭浏览器并不会停止模型服务；请用 `停止.bat`。
+
+评分复现应使用相同的模型版本、锁定的推理依赖和运行方式。可选的 ONNX、GPU 和不同硬件不保证逐位相同。`/api/status` 会报告实际运行方式及评分版本。中文输入恢复 BERT 首尾标记后，旧中文校准配置不再适用，需重跑评测。英文评分方式不变。
 
 ## 测试
 

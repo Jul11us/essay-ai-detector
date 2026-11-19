@@ -37,7 +37,8 @@ WORKDIR /app/backend
 # 先装 CPU 版 torch：默认 PyPI 的是带 CUDA 的大包，镜像会大好几倍。
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
 ARG PIP_INDEX_URL=
-RUN pip install torch --index-url "$TORCH_INDEX"
+COPY backend/requirements-torch.txt ./
+RUN pip install -r requirements-torch.txt --index-url "$TORCH_INDEX"
 COPY backend/requirements.txt ./
 RUN pip install -r requirements.txt ${PIP_INDEX_URL:+--index-url "$PIP_INDEX_URL"}
 

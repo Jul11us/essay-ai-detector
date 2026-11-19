@@ -12,9 +12,9 @@ from pathlib import Path
 SCORING_VERSION = "paragraph-weighted-v1"
 
 # The library code is part of the recipe too: the same weights can score differently under
-# another transformers/tokenizers/torch (or onnxruntime) release, and requirements.txt only gives
-# lower bounds. Major.minor is included; patch releases are not, so routine fixes do not void a
-# calibration. Any change here makes an existing calibration fall back to the default thresholds.
+# another transformers/tokenizers/torch (or onnxruntime) release, and a local install can drift
+# from the versions pinned in requirements.txt. Major.minor is included; patch releases are not,
+# so routine fixes do not void a calibration. Any change here makes an existing calibration fall back to the default thresholds.
 STACK_PACKAGES = {
     "pytorch": ("torch", "transformers", "tokenizers"),
     "onnx": ("onnxruntime", "transformers", "tokenizers"),
@@ -51,11 +51,14 @@ def inference_stack(runtime: str) -> dict[str, str]:
     return versions
 
 
-def _weight_files(path: Path, runtime: str) -> list[Path]:
+def _weight_files(path: Path, runtime: str, weight_name: str | None = None) -> list[Path]:
     """The weight files the loader will read, or [] when they are not all there."""
     if runtime.startswith("onnx"):
         weights = path / ("model.int8.onnx" if runtime == "onnx-int8" else "model.onnx")
         return [weights] if weights.is_file() else []
+    if weight_name:
+        # The loader was told which file to read (e.g. the .bin even when a .safetensors exists).
+        return [path / weight_name] if (path / weight_name).is_file() else []
     for name in ("model.safetensors", "pytorch_model.bin"):
         if (path / name).is_file():
             return [path / name]
@@ -80,12 +83,18 @@ def _weight_files(path: Path, runtime: str) -> list[Path]:
     return []
 
 
-def model_revision(path: Path, runtime: str) -> str | None:
-    weights = _weight_files(path, runtime)
+def model_revision(
+    path: Path,
+    runtime: str,
+    *,
+    scoring_version: str | None = None,
+    weight_name: str | None = None,
+) -> str | None:
+    weights = _weight_files(path, runtime, weight_name)
     if not weights:
         return None
     stack = ";".join(f"{k}={v}" for k, v in sorted(inference_stack(runtime).items()))
-    digest = hashlib.sha256(f"{runtime}:{SCORING_VERSION}:{stack}".encode())
+    digest = hashlib.sha256(f"{runtime}:{scoring_version or SCORING_VERSION}:{stack}".encode())
     files = weights + [path / name for name in TOKENIZER_FILES if (path / name).is_file()]
     if runtime.startswith("onnx"):
         files.extend(
