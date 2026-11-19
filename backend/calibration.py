@@ -52,17 +52,19 @@ def validate_split_groups(rows: list[dict], *, require_splits: bool = False) -> 
         group_splits[group] = split
 
 
-def _high_eligible(confidence: str, genre: str | None, char_count: int | None) -> bool:
+def _high_eligible(confidence: str, genre: str | None, char_count: int | None, lang: str | None = None) -> bool:
+    # Chinese papers and all English text may be flagged as a single paragraph once enough
+    # text was scored; with char_count at the floor, "low" confidence means only one paragraph.
     return confidence != "low" or (
-        genre == "paper" and char_count is not None and char_count >= PAPER_MIN_HIGH_CHARS
+        (genre == "paper" or lang == "en") and char_count is not None and char_count >= PAPER_MIN_HIGH_CHARS
     )
 
 
 def document_verdict(score: float, confidence: str, low: float, high: float, *,
-                     genre: str | None = None, char_count: int | None = None) -> str:
+                     genre: str | None = None, char_count: int | None = None, lang: str | None = None) -> str:
     if score < low:
         return "low"
-    if score >= high and _high_eligible(confidence, genre, char_count):
+    if score >= high and _high_eligible(confidence, genre, char_count, lang):
         return "high"
     return "uncertain"
 
@@ -78,7 +80,7 @@ def threshold_metrics(records: list[dict], low: float, high: float, level: float
     ai = [r for r in records if r["label"] == "ai"]
     mixed = [r for r in records if r["label"] == "mixed"]
     verdict = lambda r: document_verdict(r["score"], r.get("confidence", "unknown"), low, high,
-                                         genre=genre, char_count=r.get("char_count"))
+                                         genre=genre, char_count=r.get("char_count"), lang=r.get("lang"))
     return {
         "n_binary": len(human) + len(ai),
         "human_high_false_flag": _rate(sum(verdict(r) == "high" for r in human), len(human), level),
@@ -107,7 +109,7 @@ def fit_thresholds(records: list[dict], *, max_false_positive_rate: float = 0.20
         if type(score) not in (int, float) or not math.isfinite(score) or not 0 <= score <= 1:
             raise ValueError("Calibration scores must be finite numbers in 0..1")
     binary = [r for r in records if r["label"] in {"human", "ai"}]
-    eligible = [r for r in binary if _high_eligible(r.get("confidence", "unknown"), genre, r.get("char_count"))]
+    eligible = [r for r in binary if _high_eligible(r.get("confidence", "unknown"), genre, r.get("char_count"), r.get("lang"))]
     human = sorted(r["score"] for r in eligible if r["label"] == "human")
     ai = sorted(r["score"] for r in binary if r["label"] == "ai")
     n_human = sum(r["label"] == "human" for r in binary)

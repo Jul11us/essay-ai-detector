@@ -3,11 +3,11 @@
     "en": {
       "abstain": 52,
       "ai": 50,
-      "ai_uncertain": 21,
-      "false_flags": 0,
+      "ai_uncertain": 2,
+      "false_flags": 1,
       "human": 50,
-      "human_uncertain": 3,
-      "misses": 23,
+      "human_uncertain": 2,
+      "misses": 4,
       "n": 100
     },
     "zh": {

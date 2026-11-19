@@ -18,6 +18,19 @@ def test_high_score_low_confidence_is_uncertain():
     assert result.verdict == "uncertain"
 
 
+def test_long_single_english_paragraph_can_be_high_but_keeps_low_confidence():
+    result = aggregate(["a" * 400], [0.80], "en")
+    assert result.confidence == "low"
+    assert result.verdict == "high"
+    assert aggregate(["a" * 399], [0.80], "en").verdict == "uncertain"
+    assert aggregate(["a" * 400], [0.70], "en").verdict == "uncertain"
+
+
+def test_long_single_chinese_paragraph_without_paper_genre_stays_uncertain():
+    assert aggregate(["文" * 400], [0.80], "zh").verdict == "uncertain"
+    assert aggregate(["文" * 400], [0.80], "zh", genre="paper").verdict == "high"
+
+
 def test_high_score_medium_confidence_is_high():
     paras = ["a" * 250, "b" * 250]
     result = aggregate(paras, [0.80, 0.80], "en")

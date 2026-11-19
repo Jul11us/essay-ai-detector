@@ -44,6 +44,13 @@ FILES = {
         "sha256": "909b4e896c0ff85cc0ea99dca405a2a930e7ee61d50176649a2716fb87e5f1cf",
     },
 }
+DETECTRL_RAW = "https://raw.githubusercontent.com/NLP2CT/DetectRL/3472f0ae3cc81133c821e901f6d5c8f79c60dd23/Benchmark/Benchmark_Data/Multi_Domain"
+for _domain, _sha in {
+    "xsum": "c2eb61da032e842b7b38552857953c0e695e9c4edd22eaa770766e478d66e741",
+    "writing_prompt": "7e224409cb3b149cb4c059123275b44209b44732e2d54d9d5828e8fb93b00851",
+    "yelp_review": "041b07d6c9a8f224ae7c77e8a4202c08ac2c01c2ca5b21becb7fe60d27b68f66",
+}.items():
+    FILES[f"detectrl_{_domain}_test.json"] = {"url": f"{DETECTRL_RAW}/multi_domains_{_domain}_test.json", "sha256": _sha}
 SOURCES = {
     "ghostbuster": {
         "source": "Ghostbuster essay", "domain": "composition",
@@ -70,6 +77,11 @@ SOURCES = {
         "dataset_revision": "3472f0ae3cc81133c821e901f6d5c8f79c60dd23", "paper_url": "https://arxiv.org/abs/2410.23746",
     },
 }
+# Single-paragraph set: one-paragraph English texts that the document coverage rule used to
+# keep out of `high`; every sample is test-only so it can check, never fit, that rule.
+SINGLE_PARAGRAPH_DOMAINS = {"xsum": "news", "writing_prompt": "story", "yelp_review": "review"}
+SINGLE_PARAGRAPH_ELLIPSE = 150
+SINGLE_PARAGRAPH_PER_DOMAIN = 60
 # Defaults: (source, label, generator) -> sample count. Generators chosen for
 # realistic essay quality; GPT-2/babbage/curie/bloomz/flan-t5 essays are excluded.
 DEFAULT_QUOTAS = {
@@ -235,6 +247,36 @@ def select(out: Path, quotas: dict, seed: int, fetch_ghost=fetch_ghostbuster, fe
     return items
 
 
+def single_paragraph(text: str) -> bool:
+    return len([line for line in text.splitlines() if line.strip()]) == 1
+
+
+def select_single_paragraph(out: Path, seed: int, fetch=fetch_file, *, ellipse: int = SINGLE_PARAGRAPH_ELLIPSE,
+                            per_domain: int = SINGLE_PARAGRAPH_PER_DOMAIN) -> list[dict]:
+    seen: set[str] = set()
+    rows = list(csv.DictReader(io.StringIO(fetch(out, "ellipse_train.csv").decode("utf-8", errors="replace"))))
+    pool = [_item("ellipse", r["text_id_kaggle"], "human", r["full_text"], f"ellipse-{r['text_id_kaggle']}",
+                  writer_group="ell_students_grade8_12", grade=r.get("grade"), prompt_name=r.get("prompt"),
+                  domain="composition")
+            for r in rows if single_paragraph(r["full_text"])]
+    items = pick(pool, ellipse, seed, "single-paragraph ellipse", seen)
+    for name, domain in SINGLE_PARAGRAPH_DOMAINS.items():
+        data = json.loads(fetch(out, f"detectrl_{name}_test.json"))
+        for label in ("human", "ai"):
+            raw = "human" if label == "human" else "llm"
+            pool = [_item("detectrl", f"{name}-{i}", label, r["text"],
+                          f"detectrl-{name}-{digest(' '.join(r['text'].split()))[:20]}", domain=domain,
+                          source_name=f"DetectRL {domain}", source_url=FILES[f"detectrl_{name}_test.json"]["url"],
+                          writer_group="detectrl_human_unspecified" if label == "human" else f"detectrl_{r.get('llm_type')}",
+                          generated_model=r.get("llm_type") if label == "ai" else None,
+                          generation_method=r.get("data_type") if label == "ai" else None)
+                    for i, r in enumerate(data) if r.get("label") == raw and single_paragraph(r["text"])]
+            items.extend(pick(pool, per_domain, seed, f"single-paragraph {name} {label}", seen))
+    for item in items:
+        item["split"] = "test"
+    return items
+
+
 def assign_splits(items: list[dict], seed: int) -> None:
     """Alternate whole groups within each source/label stratum: pairs and same-prompt essays never cross splits."""
     strata: dict[tuple, list[str]] = defaultdict(list)
@@ -255,7 +297,7 @@ def assign_splits(items: list[dict], seed: int) -> None:
         item["split"] = group_split[item["group_id"]]
 
 
-def write_corpus(out: Path, items: list[dict], seed: int) -> dict:
+def write_corpus(out: Path, items: list[dict], seed: int, *, split_note: str | None = None) -> dict:
     samples = out / "samples"
     samples.mkdir(parents=True, exist_ok=True)
     records = []
@@ -268,7 +310,8 @@ def write_corpus(out: Path, items: list[dict], seed: int) -> dict:
         (out / filename).write_bytes(item["text"].encode("utf-8"))
         record = {
             "id": item_id, "file": filename, "lang": "en", "label": item["label"],
-            "source": src["source"], "domain": src["domain"], "source_url": src["source_url"],
+            "source": item.get("source_name", src["source"]), "domain": item.get("domain", src["domain"]),
+            "source_url": item.get("source_url", src["source_url"]),
             "license": src["license"], "dataset_revision": src["dataset_revision"],
             "group_id": item["group_id"], "split": item["split"], "writer_group": item["writer_group"],
             "generated_model": item.get("generated_model"), "source_key": item["key"],
@@ -290,7 +333,7 @@ def write_corpus(out: Path, items: list[dict], seed: int) -> dict:
         "schema_version": 1, "seed": seed, "files": FILES, "sources": SOURCES,
         "selection": "SHA256-seeded order per source/generator; first eligible complete texts; no model scores read",
         "length_limits_nonwhitespace_chars": [MIN_CHARS, MAX_CHARS],
-        "split": "whole groups alternate within each source/label/generator stratum; DetectRL abstracts are test-only because their LLM versions cannot be linked to source abstracts",
+        "split": split_note or "whole groups alternate within each source/label/generator stratum; DetectRL abstracts are test-only because their LLM versions cannot be linked to source abstracts",
         "counts": dict(sorted(counts.items())),
         "by_writer_group": dict(sorted(Counter(f"{r['domain']}:{r['label']}:{r['writer_group']}" for r in records).items())),
         "manifest_sha256": digest(manifest.read_bytes()),
@@ -310,13 +353,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--seed", type=int, default=20261119)
+    parser.add_argument("--set", choices=("default", "single-paragraph"), default="default")
     args = parser.parse_args()
+    if args.set == "single-paragraph" and args.out == DEFAULT_OUT:
+        args.out = PRIVATE_ROOT / "public-en-single-paragraph"
     out = args.out.resolve()
     if not out.is_relative_to(PRIVATE_ROOT.resolve()):
         parser.error("--out must be inside experiments/benchmark-private (the git-ignored benchmark directory)")
-    items = select(out, DEFAULT_QUOTAS, args.seed)
-    assign_splits(items, args.seed)
-    summary = write_corpus(out, items, args.seed)
+    if args.set == "single-paragraph":
+        items = select_single_paragraph(out, args.seed)
+        summary = write_corpus(out, items, args.seed, split_note="test only; checks the single-paragraph coverage rule")
+    else:
+        items = select(out, DEFAULT_QUOTAS, args.seed)
+        assign_splits(items, args.seed)
+        summary = write_corpus(out, items, args.seed)
     print(json.dumps({"manifest": str(out / "manifest.jsonl"), "counts": summary["counts"], "manifest_sha256": summary["manifest_sha256"]}, ensure_ascii=True))
 
 

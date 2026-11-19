@@ -42,7 +42,25 @@ Run on 2026-11-19 against the pinned Vanguard model (`sha256:713c8350…`), 760 
 - Both false flags are ELLIPSE English-learner essays (2/120; scores 0.75 and 0.81). The native-writer Ghostbuster essays had none, and learners also produced most human `uncertain` results (15 of 18).
 - Composition misses and uncertain results come mostly from Ghostbuster Claude essays (1 low, 6 uncertain of 40); GPT-3.5, GPT-4 and Claude-instant ArguGPT essays were flagged 159/160 times.
 - 11 of the 15 abstract misses are paraphrase attacks (back-translation 9/17 low, DIPPER 2/10 low); the 19 direct-prompt AI abstracts had no misses.
-- Paper abstracts are single paragraphs, so 155 of 240 have `low` confidence and cannot be judged `high`. 95 of 120 AI abstracts scored at least 0.75 but only 29 were flagged: on abstracts the coverage rule, not the model score, sets most of the uncertain rate.
+- Paper abstracts are single paragraphs, so 155 of 240 have `low` confidence. Under the original coverage rule, 95 of 120 AI abstracts scored at least 0.75 but only 29 were flagged. The single-paragraph rule below fixes this; the table above shows results before that change.
+
+## Single-paragraph English text
+
+English documents with one scored paragraph of at least 400 non-whitespace characters can now be judged `high` (the same floor as the Chinese `genre=paper` exception). Confidence stays `low`, and the review note asks for a manual check. Shorter text and Chinese text without `genre=paper` are unchanged. Scores are unchanged too; only the verdict rule moved.
+
+A separate test-only set checks the rule on single-paragraph text: 150 ELLIPSE learner essays, plus DetectRL news, story and review texts (60 human and 60 AI each). Build it with `python scripts/prepare_english_benchmark.py --set single-paragraph` (manifest SHA-256 `98318ef726d6e5c0578f372e529c3ad62216066694c5cc2c3cde5604235add72`).
+
+| Set | Label | Before | After |
+| --- | --- | --- | --- |
+| arXiv abstracts (main set) | AI flagged `high` | 29/120 | 95/120 (79.2%, 71.1–85.5%) |
+| arXiv abstracts (main set) | AI `uncertain` | 76/120 | 10/120 |
+| arXiv abstracts (main set) | human false flags | 0/120 | 0/120 (0.0–3.1%) |
+| Single-paragraph set | AI flagged `high` | 91/180 | 157/180 (87.2%, 81.6–91.3%) |
+| Single-paragraph set | human false flags | 1/330 | 5/330 (1.5%, 0.6–3.5%) |
+
+- The 4 new false flags are 3 of 60 human stories (5.0%, 1.7–13.7%) and 1 of 150 learner essays; each scored 0.89–0.97, with 683–898 characters.
+- Compositions in the main set are multi-paragraph, so their counts did not change.
+- A stricter bar for single paragraphs would trade detection for fewer false flags. At 0.95, both sets combined would have 1 false flag instead of 4 and 114 flagged AI texts instead of 132. That bar was read off these same samples, so it would need independent data before use.
 
 ## Limits
 
