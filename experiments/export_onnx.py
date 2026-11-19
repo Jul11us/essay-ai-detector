@@ -59,33 +59,38 @@ def _export(model, tokenizer, dest: Path) -> None:
 
 def export_vanguard() -> None:
     from app.loader import default_vanguard_path
+    from app.model_artifacts import verify_artifacts
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
     path = default_vanguard_path()
-    if not (path / "config.json").is_file():
-        raise SystemExit(f"找不到英文权重：{path}")
+    verify_artifacts(path, "en")
     tok = AutoTokenizer.from_pretrained(str(path), local_files_only=True)
     model = AutoModelForSequenceClassification.from_pretrained(
         str(path),
         local_files_only=True,
+        use_safetensors=True,
         attn_implementation="eager",
+        reference_compile=False,
     )
     _export(model, tok, path)
 
 
 def export_zh() -> None:
+    from app.model_artifacts import verify_artifacts
+
     override = os.environ.get("ZH_MODEL_PATH")
     if not override:
         print("没设 ZH_MODEL_PATH，跳过中文。")
         return
     path = Path(override)
-    if not (path / "config.json").is_file():
-        raise SystemExit(f"找不到中文权重：{path}")
+    verify_artifacts(path, "zh")
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(str(path))
+    tok = AutoTokenizer.from_pretrained(str(path), local_files_only=True)
     model = AutoModelForSequenceClassification.from_pretrained(
         str(path),
+        local_files_only=True,
+        use_safetensors=False,
         num_labels=2,
         id2label={0: "人类", 1: "AI"},
         label2id={"人类": 0, "AI": 1},

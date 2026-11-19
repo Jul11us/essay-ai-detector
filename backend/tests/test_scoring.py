@@ -177,6 +177,22 @@ def test_each_window_gets_special_tokens():
     assert content[-1] == 102
 
 
+@pytest.mark.parametrize("batched", [False, True])
+def test_bert_boundaries_are_preserved_without_legacy_tokenizer_helpers(batched):
+    tokenizer = SimpleNamespace(encode=lambda *_args, **_kwargs: list(range(10, 17)))
+    model = FakeSoftmaxModel(0.4)
+    args = dict(head=HEAD_SOFTMAX, ai_index=1, max_length=6, boundaries=(101, 102))
+    if batched:
+        score_short_texts(["long", "long"], tokenizer, model, **args)
+        assert model.last_batch_ids.tolist() == [[101, 10, 11, 12, 13, 102]] * 2
+    else:
+        score_paragraph("long", tokenizer, model, stride=3, **args)
+        assert model.last_batch_ids.tolist() == [
+            [101, 10, 11, 12, 13, 102],
+            [101, 13, 14, 15, 16, 102],
+        ]
+
+
 class LenSigmoidModel:
     """P(AI) 随序列里非 pad 的长度变，用来核对成批打分后结果没有错位。"""
 

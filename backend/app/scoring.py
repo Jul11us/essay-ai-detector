@@ -5,11 +5,6 @@ import re
 import torch
 import torch.nn.functional as F
 
-MODEL_IDS = {
-    "zh": "yuchuantian/AIGC_detector_zhv3",
-    "en": "ShantanuT01/vanguard-ai-text-detector",
-}
-
 HEAD_SIGMOID = "sigmoid"
 HEAD_SOFTMAX = "softmax"
 
@@ -106,8 +101,12 @@ def _raw_token_ids(tokenizer, text: str) -> list[int]:
     return [int(x) for x in enc["input_ids"].reshape(-1).tolist()]
 
 
-def _window_features(tokenizer, chunk: list[int], max_length: int) -> dict:
-    if hasattr(tokenizer, "build_inputs_with_special_tokens"):
+def _window_features(
+    tokenizer, chunk: list[int], max_length: int, boundaries: tuple[int, int] | None
+) -> dict:
+    if boundaries is not None:
+        ids = [boundaries[0], *chunk, boundaries[1]]
+    elif hasattr(tokenizer, "build_inputs_with_special_tokens"):
         ids = tokenizer.build_inputs_with_special_tokens(list(chunk))
     else:
         ids = list(chunk)
@@ -120,6 +119,15 @@ def _window_features(tokenizer, chunk: list[int], max_length: int) -> dict:
     return feat
 
 
+def _window_budget(tokenizer, max_length: int, boundaries: tuple[int, int] | None) -> int:
+    if boundaries is not None:
+        return max_length - len(boundaries)
+    n_special = 0
+    if hasattr(tokenizer, "num_special_tokens_to_add"):
+        n_special = int(tokenizer.num_special_tokens_to_add(pair=False))
+    return max(1, max_length - n_special)
+
+
 def score_paragraph(
     text: str,
     tokenizer,
@@ -129,17 +137,15 @@ def score_paragraph(
     ai_index: int | None = None,
     max_length: int = 512,
     stride: int = 256,
+    boundaries: tuple[int, int] | None = None,
 ) -> float:
-    n_special = 0
-    if hasattr(tokenizer, "num_special_tokens_to_add"):
-        n_special = int(tokenizer.num_special_tokens_to_add(pair=False))
-    budget = max(1, max_length - n_special)
+    budget = _window_budget(tokenizer, max_length, boundaries)
     step = max(1, min(budget, stride))
     raw = _raw_token_ids(tokenizer, text)
     spans = content_windows(len(raw), budget, step)
     if not spans:
         return 0.0
-    features = [_window_features(tokenizer, raw[a:b], max_length) for a, b in spans]
+    features = [_window_features(tokenizer, raw[a:b], max_length, boundaries) for a, b in spans]
     if hasattr(tokenizer, "pad"):
         enc = tokenizer.pad(features, padding=True, return_tensors="pt")
     else:
@@ -185,6 +191,7 @@ def score_short_texts(
     head: str,
     ai_index: int | None = None,
     max_length: int = 512,
+    boundaries: tuple[int, int] | None = None,
 ) -> list[float]:
     """一批短文本各出一个 P(AI)。
 
@@ -193,12 +200,9 @@ def score_short_texts(
     """
     if not texts:
         return []
-    n_special = 0
-    if hasattr(tokenizer, "num_special_tokens_to_add"):
-        n_special = int(tokenizer.num_special_tokens_to_add(pair=False))
-    budget = max(1, max_length - n_special)
+    budget = _window_budget(tokenizer, max_length, boundaries)
     features = [
-        _window_features(tokenizer, _raw_token_ids(tokenizer, t)[:budget], max_length)
+        _window_features(tokenizer, _raw_token_ids(tokenizer, t)[:budget], max_length, boundaries)
         for t in texts
     ]
     # 长度相近的放一批，少补 padding。
