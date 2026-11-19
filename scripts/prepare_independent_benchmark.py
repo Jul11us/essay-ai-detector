@@ -429,7 +429,7 @@ def collect(out: Path, *, limit_en=10, limit_zh=20, since=None, offline=False, f
                 text = parsed["text"].strip() + "\n"
                 item_id = f"independent-{lang}-{digest(url)[:16]}"
                 filename = f"samples/{item_id}.txt"
-                (out / filename).write_text(text, encoding="utf-8")
+                (out / filename).write_bytes(text.encode("utf-8"))
                 cutoff = CUTOFFS[lang]
                 rows.append({"id": item_id, "file": filename, "lang": lang, "label": "human", "domain": "paper",
                              "split": "test", "group_id": f"paper-{digest(url)[:24]}", "source": source,

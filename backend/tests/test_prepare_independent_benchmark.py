@@ -1,5 +1,6 @@
 """Network-free fixtures for licensed, post-release web paper collection."""
 import importlib.util
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -171,6 +172,22 @@ def test_collect_replay_deduplicates_and_manifest_passes_backend(tmp_path, pdf):
     assert "earlier drafts" in first["limitations"][1]
     second = prepare.collect(out, limit_en=1, limit_zh=3, fetcher=http, seeds=seeds, offline=True)
     assert first == second
+
+
+def test_sample_hash_matches_file_bytes_with_windows_text_newlines(tmp_path, monkeypatch):
+    write_text = Path.write_text
+    def windows_write_text(path, text, *args, **kwargs):
+        if path.parent.name == "samples":
+            text = text.replace("\n", "\r\n")
+        return write_text(path, text, *args, **kwargs)
+    monkeypatch.setattr(Path, "write_text", windows_write_text)
+    seeds = seed_file(tmp_path, [("JTO", "https://www.jto.ac.cn/paper1")])
+    out = tmp_path / "out"
+    prepare.collect(out, limit_en=0, limit_zh=1, fetcher=FixtureHTTP(), seeds=seeds)
+    row = benchmark.load_manifest(out / "manifest.jsonl")[0]
+    data = (out / row["file"]).read_bytes()
+    assert row["text_sha256"] == hashlib.sha256(data).hexdigest()
+    assert b"\n" in data and b"\r\n" not in data
 
 
 def test_journal_cap_and_language_limit_are_audited(tmp_path):
