@@ -43,7 +43,7 @@ The **Task center** stores up to 50 detection, batch and evaluation jobs in this
 
 The output is a **writing-pattern signal**, not the percentage of words written by AI, evidence of misconduct, or a prediction of a school's decision. Display thresholds are provisional. The project does not yet have a representative, labeled evaluation set from which it could publish an accuracy or false-positive rate. Short texts, non-native English writing, edited text, and new domains need careful human review. See the [evaluation notes](benchmark.md).
 
-The reproducible [public HC3 pilot](benchmark-dataset.md) uses pinned bilingual human/ChatGPT Q&A pairs, not student essays. Evaluation runs the actual local API and reports errors, uncertainty, source groups and Wilson intervals. Threshold fitting uses only calibration groups, with disjoint test groups; unverified training overlap, insufficient samples or failed test constraints keep a profile inactive. Scores remain raw model signals, and paragraph/sentence thresholds are not calibrated by document-level data.
+The reproducible [public HC3 pilot](benchmark-dataset.md) uses pinned bilingual human/ChatGPT Q&A pairs, not student essays. Evaluation runs the actual local API and reports errors, uncertainty, source groups and Wilson intervals. Threshold fitting uses only calibration groups, with disjoint test groups; unverified training overlap, insufficient samples or failed test constraints keep a profile inactive. Scores remain raw model signals, and paragraph/sentence thresholds are not calibrated by document-level data. The [English essay and abstract benchmark](benchmark-english.md) measures English false flags and misses on pinned public corpora.
 
 ## Get started
 
