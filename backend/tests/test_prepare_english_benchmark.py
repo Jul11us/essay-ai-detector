@@ -1,5 +1,6 @@
 """Regression checks for the English corpus: provenance, eligibility and split leakage."""
 import importlib.util
+import io
 import json
 import sys
 from pathlib import Path
@@ -33,7 +34,7 @@ def fake_fetch(out, name):
         lines += [f'{i},P{i % 2},{model},"{essay(name + model, i)}"' for i in range(10)]
         return "\n".join(lines).encode()
     rows = [{"text": essay("arxiv-human", i), "label": "human"} for i in range(6)]
-    rows += [{"text": essay("arxiv-ai", i), "label": "llm", "llm_type": "ChatGPT"} for i in range(6)]
+    rows += [{"text": essay("arxiv-ai", i), "label": "llm", "llm_type": "ChatGPT", "data_type": "direct_prompt"} for i in range(6)]
     return json.dumps(rows).encode()
 
 
@@ -78,6 +79,8 @@ def test_pairs_and_shared_prompts_never_cross_splits(tmp_path):
     ghost_pairs = [r for r in rows if r["group_id"].startswith("ghostbuster-essay-") and "claude" not in r["group_id"]]
     assert {r["label"] for r in ghost_pairs} == {"human", "ai"}
     assert {r["split"] for r in rows} == {"calibration", "test"}
+    assert {r["group_id"] for r in rows if r["source"] == "ELLIPSE corpus"} <= {f"ellipse-prompt-prompt-{i}" for i in range(3)}
+    assert {r["split"] for r in rows if r["domain"] == "paper"} == {"test"}
 
 
 def test_generation_is_deterministic(tmp_path):
@@ -98,3 +101,24 @@ def test_shortfall_and_checksum_mismatch_fail_loudly(tmp_path):
     raw.write_text("tampered")
     with pytest.raises(ValueError, match="checksum mismatch"):
         prepare.fetch_file(tmp_path, "ellipse_train.csv")
+
+
+class _Response(io.BytesIO):
+    def __init__(self, body, length):
+        super().__init__(body)
+        self.headers = {"Content-Length": str(length)}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_truncated_ghostbuster_download_is_not_cached(tmp_path, monkeypatch):
+    monkeypatch.setattr(prepare.urllib.request, "urlopen", lambda *a, **k: _Response(b"partial", 100))
+    with pytest.raises(ValueError, match="Truncated"):
+        prepare.fetch_ghostbuster(tmp_path, "human", 1)
+    assert not (tmp_path / "raw" / "ghostbuster" / "human" / "1.txt").exists()
+    monkeypatch.setattr(prepare.urllib.request, "urlopen", lambda *a, **k: _Response(b"complete", 8))
+    assert prepare.fetch_ghostbuster(tmp_path, "human", 1) == "complete"

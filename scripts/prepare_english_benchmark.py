@@ -114,9 +114,12 @@ def order_key(seed: int, *parts: object) -> str:
 def _download(url: str, limit: int = 60_000_000) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "essay-ai-detector-en-benchmark/1"})
     with urllib.request.urlopen(request, timeout=90) as response:
+        expected = response.headers.get("Content-Length")
         data = response.read(limit + 1)
     if len(data) > limit:
         raise ValueError("Source exceeds the expected download size")
+    if expected is not None and len(data) != int(expected):
+        raise ValueError(f"Truncated download: {url}")
     return data
 
 
@@ -140,7 +143,9 @@ def fetch_ghostbuster(out: Path, folder: str, index: int) -> str:
     path = out / "raw" / "ghostbuster" / folder / f"{index}.txt"
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(_download(f"{GHOSTBUSTER_RAW}/{folder}/{index}.txt", 1_000_000))
+        partial = path.with_suffix(".part")
+        partial.write_bytes(_download(f"{GHOSTBUSTER_RAW}/{folder}/{index}.txt", 1_000_000))
+        partial.replace(path)
     return path.read_bytes().decode("utf-8")
 
 
@@ -198,7 +203,7 @@ def select(out: Path, quotas: dict, seed: int, fetch_ghost=fetch_ghostbuster, fe
         items.extend(claude)
     if quotas.get(("ellipse", "human", None)):
         rows = list(csv.DictReader(io.StringIO(fetch(out, "ellipse_train.csv").decode("utf-8", errors="replace"))))
-        pool = [_item("ellipse", r["text_id_kaggle"], "human", r["full_text"], f"ellipse-{r['text_id_kaggle']}",
+        pool = [_item("ellipse", r["text_id_kaggle"], "human", r["full_text"], f"ellipse-prompt-{re.sub(r'[^a-z0-9]+', '-', r['prompt'].lower()).strip('-')}",
                       writer_group="ell_students_grade8_12", grade=r.get("grade"), prompt_name=r.get("prompt"))
                 for r in rows]
         items.extend(pick(pool, quotas["ellipse", "human", None], seed, "ellipse", seen))
@@ -224,7 +229,7 @@ def select(out: Path, quotas: dict, seed: int, fetch_ghost=fetch_ghostbuster, fe
                         for i, r in enumerate(rows) if r.get("label") == "human"]
             else:
                 pool = [_item("detectrl", f"{i}", "ai", r["text"], f"detectrl-arxiv-{digest(' '.join(r['text'].split()))[:20]}",
-                              generated_model=model, writer_group=f"detectrl_{model}")
+                              generated_model=model, writer_group=f"detectrl_{model}", generation_method=r["data_type"])
                         for i, r in enumerate(rows) if r.get("label") == "llm" and r.get("llm_type") == model]
             items.extend(pick(pool, count, seed, f"detectrl {label} {model}", seen))
     return items
@@ -233,11 +238,15 @@ def select(out: Path, quotas: dict, seed: int, fetch_ghost=fetch_ghostbuster, fe
 def assign_splits(items: list[dict], seed: int) -> None:
     """Alternate whole groups within each source/label stratum: pairs and same-prompt essays never cross splits."""
     strata: dict[tuple, list[str]] = defaultdict(list)
+    group_split: dict[str, str] = {}
     for item in items:
+        if item["source_key"] == "detectrl":
+            # DetectRL has no paper id linking an abstract to its LLM versions; keep all of it out of fitting.
+            group_split[item["group_id"]] = "test"
+            continue
         stratum = (item["source_key"], "pair" if "paired_text" in item else item["label"], item.get("generated_model"))
         if item["group_id"] not in strata[stratum]:
             strata[stratum].append(item["group_id"])
-    group_split: dict[str, str] = {}
     for stratum in sorted(strata, key=str):
         groups = [g for g in sorted(strata[stratum], key=lambda g: order_key(seed, "split", g)) if g not in group_split]
         for index, group in enumerate(groups):
@@ -267,7 +276,7 @@ def write_corpus(out: Path, items: list[dict], seed: int) -> dict:
             "text_sha256": digest(item["text"]), "raw_char_count": char_count(item["text"]),
             "text_transformation": "none; exact complete source text",
         }
-        for key in ("grade", "prompt_name", "prompt_id"):
+        for key in ("grade", "prompt_name", "prompt_id", "generation_method"):
             if item.get(key):
                 record[key] = item[key]
         records.append(record)
@@ -281,7 +290,7 @@ def write_corpus(out: Path, items: list[dict], seed: int) -> dict:
         "schema_version": 1, "seed": seed, "files": FILES, "sources": SOURCES,
         "selection": "SHA256-seeded order per source/generator; first eligible complete texts; no model scores read",
         "length_limits_nonwhitespace_chars": [MIN_CHARS, MAX_CHARS],
-        "split": "whole groups alternate within each source/label/generator stratum",
+        "split": "whole groups alternate within each source/label/generator stratum; DetectRL abstracts are test-only because their LLM versions cannot be linked to source abstracts",
         "counts": dict(sorted(counts.items())),
         "by_writer_group": dict(sorted(Counter(f"{r['domain']}:{r['label']}:{r['writer_group']}" for r in records).items())),
         "manifest_sha256": digest(manifest.read_bytes()),

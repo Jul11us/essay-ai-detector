@@ -12,7 +12,7 @@ python benchmark.py $D/manifest.jsonl --api http://127.0.0.1:8000 \
   --predictions-out $D/predictions.jsonl --out $D/report.json --calibration-out $D/calibration.json
 ```
 
-Preparation downloads about 25 MB, checks every bulk file against a pinned SHA-256 and fails if a quota cannot be filled. Selection is a seeded hash order with length and language rules only (400–8,000 non-whitespace characters, Latin script); model scores are never read. Default seed `20261119` gives manifest SHA-256 `a21ac2817abe576c69469dd75fbc7f04ad9a2143896c0753403a93d2c6fac594`.
+Preparation downloads about 25 MB, checks every bulk file against a pinned SHA-256 and fails if a quota cannot be filled. Selection is a seeded hash order with length and language rules only (400–8,000 non-whitespace characters, Latin script); model scores are never read. Default seed `20261119` gives manifest SHA-256 `ab3afa90cd447f39032c5a0bcbf8717078e2b0e26ced901351c9c55960b3f77b`.
 
 ## Sources
 
@@ -24,9 +24,9 @@ Preparation downloads about 25 MB, checks every bulk file against a pinned SHA-2
 | Composition | human | [ELLIPSE](https://github.com/scrosseye/ELLIPSE-Corpus/tree/710963bbf1acf23a28e40643d9f937d06f047dd4) grade 8–12 English-learner essays, CC BY 4.0 | 120 |
 | Composition | AI | [ArguGPT](https://github.com/huhailinguist/ArguGPT/tree/cfbd00e75b63db44756375cfc1ee4278f8cd2bf1) GPT-3.5 / GPT-4 / Claude-instant argumentative essays (TOEFL, WECCL, GRE prompts) | 40 each |
 | Paper | human | [DetectRL](https://github.com/NLP2CT/DetectRL/tree/3472f0ae3cc81133c821e901f6d5c8f79c60dd23) arXiv abstracts | 120 |
-| Paper | AI | DetectRL arXiv abstracts by ChatGPT, Claude-instant, PaLM-2, Llama-2-70b | 30 each |
+| Paper | AI | DetectRL arXiv abstracts by ChatGPT, Claude-instant, PaLM-2, Llama-2-70b, across DetectRL's direct, prompt, paraphrase and adversarial-perturbation methods (`generation_method`) | 30 each |
 
-ArguGPT and DetectRL ship no license file: use them for local evaluation only and do not redistribute samples. Every row carries `group_id` and a `calibration`/`test` split; paired Ghostbuster essays and ArguGPT essays sharing a prompt never cross splits.
+ArguGPT and DetectRL ship no license file: use them for local evaluation only and do not redistribute samples. Every row carries `group_id` and a `calibration`/`test` split; paired Ghostbuster essays and ELLIPSE or ArguGPT essays sharing a prompt never cross splits. DetectRL does not link an abstract to its LLM versions, so all abstracts are `test` only and never fit thresholds.
 
 ## Results at the current thresholds (0.40 / 0.75)
 
@@ -41,6 +41,7 @@ Run on 2026-11-19 against the pinned Vanguard model (`sha256:713c8350…`), 760 
 
 - Both false flags are ELLIPSE English-learner essays (2/120; scores 0.75 and 0.81). The native-writer Ghostbuster essays had none, and learners also produced most human `uncertain` results (15 of 18).
 - Composition misses and uncertain results come mostly from Ghostbuster Claude essays (1 low, 6 uncertain of 40); GPT-3.5, GPT-4 and Claude-instant ArguGPT essays were flagged 159/160 times.
+- 11 of the 15 abstract misses are paraphrase attacks (back-translation 9/17 low, DIPPER 2/10 low); the 19 direct-prompt AI abstracts had no misses.
 - Paper abstracts are single paragraphs, so 155 of 240 have `low` confidence and cannot be judged `high`. 95 of 120 AI abstracts scored at least 0.75 but only 29 were flagged: on abstracts the coverage rule, not the model score, sets most of the uncertain rate.
 
 ## Limits
