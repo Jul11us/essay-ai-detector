@@ -151,3 +151,29 @@ def test_shard_names_must_stay_inside_the_model_folder(tmp_path: Path):
     index = {"weight_map": {"layer0": "../outside.safetensors"}}
     (model / "model.safetensors.index.json").write_text(json.dumps(index), encoding="utf-8")
     assert model_identity.model_revision(model, "pytorch") is None
+
+
+def test_named_weight_file_is_the_one_fingerprinted(tmp_path: Path):
+    # The Chinese loader reads pytorch_model.bin even when a .safetensors sits next to it.
+    (tmp_path / "model.safetensors").write_bytes(b"unused weights")
+    (tmp_path / "pytorch_model.bin").write_bytes(b"loaded weights")
+    named = model_identity.model_revision(tmp_path, "pytorch", weight_name="pytorch_model.bin")
+    assert named != model_identity.model_revision(tmp_path, "pytorch")
+    (tmp_path / "model.safetensors").write_bytes(b"changed unused weights")
+    assert (
+        model_identity.model_revision(tmp_path, "pytorch", weight_name="pytorch_model.bin") == named
+    )
+    (tmp_path / "pytorch_model.bin").write_bytes(b"changed loaded weights")
+    assert (
+        model_identity.model_revision(tmp_path, "pytorch", weight_name="pytorch_model.bin") != named
+    )
+    (tmp_path / "pytorch_model.bin").unlink()
+    assert (
+        model_identity.model_revision(tmp_path, "pytorch", weight_name="pytorch_model.bin") is None
+    )
+
+
+def test_scoring_version_override_changes_revision(tmp_path: Path):
+    (tmp_path / "model.safetensors").write_bytes(b"weights")
+    default = model_identity.model_revision(tmp_path, "pytorch")
+    assert model_identity.model_revision(tmp_path, "pytorch", scoring_version="other-v2") != default
