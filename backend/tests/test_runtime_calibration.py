@@ -16,6 +16,8 @@ REVISION = "sha256:" + "a" * 64
 @pytest.fixture(autouse=True)
 def isolate_profile_env(monkeypatch):
     monkeypatch.delenv("DETECTOR_CALIBRATION_PATH", raising=False)
+    for genre in ("COMPOSITION", "PAPER"):
+        monkeypatch.delenv(f"DETECTOR_ZH_{genre}_CALIBRATION_PATH", raising=False)
     calibration._read_profile.cache_clear()
     yield
     calibration._read_profile.cache_clear()
@@ -205,3 +207,78 @@ def test_api_calibrates_document_but_not_paragraph_or_sentence(tmp_path, monkeyp
     assert section["verdict"] == "uncertain"
     assert_defaults(section["calibration"])
     assert all(s["highlight"] == "mid" for s in sentences["sentences"])
+
+
+def install_genre(tmp_path, monkeypatch, genre, **updates):
+    profile = valid_profile()
+    zh = profile["languages"].pop("en")
+    zh["model_id"] = MODEL_IDS["zh"]
+    zh["applicability"]["domains"] = [genre]
+    zh.update(updates)
+    profile.update(schema_version=2, genre=genre, languages={"zh": zh})
+    path = tmp_path / f"{genre}.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    monkeypatch.setenv(f"DETECTOR_ZH_{genre.upper()}_CALIBRATION_PATH", str(path))
+    return path
+
+
+def test_genre_thresholds_match_only_their_explicit_request(tmp_path, monkeypatch):
+    path = install_genre(tmp_path, monkeypatch, "paper")
+    install_genre(tmp_path, monkeypatch, "composition", high=0.85)
+
+    def resolved(genre=None, count=500):
+        return calibration.resolve_calibration("zh", MODEL_IDS["zh"], REVISION, count, genre=genre)
+
+    assert_defaults(resolved())
+    assert resolved("composition")["high"] == 0.85
+    assert resolved("paper")["high"] == 0.60
+    assert_defaults(resolved("paper", count=2010))
+    monkeypatch.setenv("DETECTOR_ZH_COMPOSITION_CALIBRATION_PATH", str(path))
+    monkeypatch.setenv("DETECTOR_CALIBRATION_PATH", str(path))
+    assert_defaults(resolved("composition"))
+    assert_defaults(resolved())
+    install_genre(tmp_path, monkeypatch, "paper", status="candidate")
+    assert_defaults(resolved("paper"))
+
+
+def test_paper_coverage_only_changes_document_verdict(tmp_path, monkeypatch):
+    from app.main import app, hub
+
+    install_genre(tmp_path, monkeypatch, "paper")
+    install_genre(tmp_path, monkeypatch, "composition")
+    monkeypatch.setattr(hub, "loaded", {"zh": True, "en": False})
+    monkeypatch.setattr(hub, "revisions", {"zh": REVISION})
+    monkeypatch.setattr(hub, "score", lambda text, lang: 0.65)
+    text = "这段中文用于检验单段论文的全文分档规则。" * 24
+    with TestClient(app) as client:
+        def detect(body, **fields):
+            return client.post("/api/detect", json={"lang": "zh", "text": body, **fields}).json()
+
+        default = detect(text)
+        composition = detect(text, genre="composition")
+        paper = detect(text, genre="paper")
+        upload = client.post("/api/detect", data={"lang": "zh", "genre": "paper"},
+                             files={"file": ("paper.txt", text.encode())}).json()
+        short = detect(text[:399], genre="paper")
+    assert default["verdict"] == composition["verdict"] == short["verdict"] == "uncertain"
+    assert paper["verdict"] == upload["verdict"] == "high"
+    assert paper["calibration"]["applied"] is True
+    assert paper["score"] == default["score"]
+    assert paper["confidence"] == default["confidence"] == "low"
+    assert paper["paragraphs"] == default["paragraphs"]
+    assert "单段也可" in paper["basis"] and "单段也可" not in composition["basis"]
+    assert paper["review_risk"] == "unclear"
+
+
+@pytest.mark.parametrize("fields", [
+    {"genre": "essay"}, {"genre": {}}, {"genre": "paper", "lang": "en"},
+    {"genre": "paper", "lang": "bi"}, {"genre": "paper", "scope": "paragraph"},
+    {"genre": "paper", "selection": [0]},
+])
+def test_genre_request_is_limited_to_complete_chinese_documents(fields):
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.post("/api/detect", json={"lang": "zh", **fields})
+    assert response.status_code == 400
+    assert response.json()["error"] == "invalid_genre"

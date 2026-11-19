@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from calibration import build_profile, validate_split_groups, wilson_interval
+from calibration import ZH_GENRES, build_profile, validate_split_groups, wilson_interval
 
 LABELS = {"human", "ai", "mixed"}
 LANGS = {"en", "zh"}
@@ -224,11 +224,14 @@ def main() -> None:
     parser.add_argument("--api", default="http://127.0.0.1:8000")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--calibration-out", type=Path, help="Fit on calibration split and validate on independent test split")
+    parser.add_argument("--genre", choices=ZH_GENRES, help="Fit a genre-specific Chinese profile using the matching manifest domain")
     parser.add_argument("--max-false-positive-rate", type=float, default=0.20)
     parser.add_argument("--max-false-negative-rate", type=float, default=0.20)
     parser.add_argument("--confidence-level", type=float, default=0.95)
     parser.add_argument("--min-samples-per-class", type=int, default=30)
     args = parser.parse_args()
+    if args.genre and not args.calibration_out:
+        parser.error("--genre requires --calibration-out")
     rows = load_manifest(args.manifest)
     predictions = load_predictions(args.predictions) if args.predictions else run_api(rows, args.api)
     report = summarize(rows, predictions, confidence_level=args.confidence_level)
@@ -236,7 +239,7 @@ def main() -> None:
     if args.calibration_out:
         profile = build_profile(report["records"], max_false_positive_rate=args.max_false_positive_rate,
                                 max_false_negative_rate=args.max_false_negative_rate, confidence_level=args.confidence_level,
-                                min_samples_per_class=args.min_samples_per_class)
+                                min_samples_per_class=args.min_samples_per_class, genre=args.genre)
         report["calibration"] = {"dataset_fingerprint": profile["dataset_fingerprint"],
                                  "languages": {lang: {"status": p["status"], "reasons": p["reasons"]} for lang, p in profile["languages"].items()}}
     if args.predictions_out:

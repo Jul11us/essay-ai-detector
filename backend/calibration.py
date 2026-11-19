@@ -13,6 +13,11 @@ from datetime import datetime, timezone
 from statistics import NormalDist
 from urllib.parse import urlsplit
 
+ZH_GENRES = ("composition", "paper")
+PAPER_MIN_HIGH_CHARS = 400
+DEFAULT_LOW = 0.40
+DEFAULT_HIGH = 0.75
+
 
 def wilson_interval(count: int, denominator: int, confidence_level: float = 0.95) -> list[float] | None:
     if type(count) is not int or type(denominator) is not int or denominator < 0 or not 0 <= count <= denominator:
@@ -47,10 +52,17 @@ def validate_split_groups(rows: list[dict], *, require_splits: bool = False) -> 
         group_splits[group] = split
 
 
-def document_verdict(score: float, confidence: str, low: float, high: float) -> str:
+def _high_eligible(confidence: str, genre: str | None, char_count: int | None) -> bool:
+    return confidence != "low" or (
+        genre == "paper" and char_count is not None and char_count >= PAPER_MIN_HIGH_CHARS
+    )
+
+
+def document_verdict(score: float, confidence: str, low: float, high: float, *,
+                     genre: str | None = None, char_count: int | None = None) -> str:
     if score < low:
         return "low"
-    if score >= high and confidence != "low":
+    if score >= high and _high_eligible(confidence, genre, char_count):
         return "high"
     return "uncertain"
 
@@ -60,15 +72,18 @@ def _rate(count: int, denominator: int, level: float) -> dict:
             "wilson_ci": wilson_interval(count, denominator, level)}
 
 
-def threshold_metrics(records: list[dict], low: float, high: float, level: float = 0.95) -> dict:
+def threshold_metrics(records: list[dict], low: float, high: float, level: float = 0.95, *,
+                      genre: str | None = None) -> dict:
     human = [r for r in records if r["label"] == "human"]
     ai = [r for r in records if r["label"] == "ai"]
     mixed = [r for r in records if r["label"] == "mixed"]
-    verdict = lambda r: document_verdict(r["score"], r.get("confidence", "unknown"), low, high)
+    verdict = lambda r: document_verdict(r["score"], r.get("confidence", "unknown"), low, high,
+                                         genre=genre, char_count=r.get("char_count"))
     return {
         "n_binary": len(human) + len(ai),
         "human_high_false_flag": _rate(sum(verdict(r) == "high" for r in human), len(human), level),
         "ai_low_miss": _rate(sum(verdict(r) == "low" for r in ai), len(ai), level),
+        "ai_high": _rate(sum(verdict(r) == "high" for r in ai), len(ai), level),
         "uncertain": _rate(sum(verdict(r) == "uncertain" for r in human + ai), len(human) + len(ai), level),
         "human_uncertain": _rate(sum(verdict(r) == "uncertain" for r in human), len(human), level),
         "ai_uncertain": _rate(sum(verdict(r) == "uncertain" for r in ai), len(ai), level),
@@ -82,7 +97,8 @@ def _fits_constraints(metrics: dict, max_fp: float, max_fn: float) -> bool:
 
 
 def fit_thresholds(records: list[dict], *, max_false_positive_rate: float = 0.20,
-                   max_false_negative_rate: float = 0.20, confidence_level: float = 0.95) -> dict | None:
+                   max_false_negative_rate: float = 0.20, confidence_level: float = 0.95,
+                   genre: str | None = None) -> dict | None:
     """Fit only calibration binary samples, minimizing uncertainty under error CIs."""
     if any(r.get("split") != "calibration" for r in records):
         raise ValueError("Threshold fitting accepts only calibration records")
@@ -91,13 +107,14 @@ def fit_thresholds(records: list[dict], *, max_false_positive_rate: float = 0.20
         if type(score) not in (int, float) or not math.isfinite(score) or not 0 <= score <= 1:
             raise ValueError("Calibration scores must be finite numbers in 0..1")
     binary = [r for r in records if r["label"] in {"human", "ai"}]
-    human = sorted(r["score"] for r in binary if r["label"] == "human" and r.get("confidence", "unknown") != "low")
+    eligible = [r for r in binary if _high_eligible(r.get("confidence", "unknown"), genre, r.get("char_count"))]
+    human = sorted(r["score"] for r in eligible if r["label"] == "human")
     ai = sorted(r["score"] for r in binary if r["label"] == "ai")
     n_human = sum(r["label"] == "human" for r in binary)
     if not n_human or not ai:
         return None
     all_scores = sorted(r["score"] for r in binary)
-    high_eligible = sorted(r["score"] for r in binary if r.get("confidence", "unknown") != "low")
+    high_eligible = sorted(r["score"] for r in eligible)
     grid = sorted({0.0, 1.0} | {r["score"] for r in binary} |
                   {math.nextafter(r["score"], 1.0) for r in binary if r["score"] < 1.0})
     lows, highs = [], []
@@ -121,7 +138,8 @@ def fit_thresholds(records: list[dict], *, max_false_positive_rate: float = 0.20
     if best is None:
         return None
     low, high = best[1:]
-    return {"low": low, "high": high, "metrics": threshold_metrics(records, low, high, confidence_level)}
+    return {"low": low, "high": high,
+            "metrics": threshold_metrics(records, low, high, confidence_level, genre=genre)}
 
 
 def _sample_counts(records: list[dict]) -> dict:
@@ -166,7 +184,7 @@ def _validate_records(records: list[dict]) -> None:
 
 def build_profile(records: list[dict], *, max_false_positive_rate: float = 0.20,
                   max_false_negative_rate: float = 0.20, confidence_level: float = 0.95,
-                  min_samples_per_class: int = 30) -> dict:
+                  min_samples_per_class: int = 30, genre: str | None = None) -> dict:
     for value in (max_false_positive_rate, max_false_negative_rate):
         if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value < 1:
             raise ValueError("Error constraints must be between 0 and 1")
@@ -174,6 +192,10 @@ def build_profile(records: list[dict], *, max_false_positive_rate: float = 0.20,
     if type(min_samples_per_class) is not int or min_samples_per_class < 1:
         raise ValueError("min_samples_per_class must be a positive integer")
     _validate_records(records)
+    if genre is not None and (genre not in ZH_GENRES or any(
+        r["lang"] != "zh" or r.get("domain") != genre for r in records
+    )):
+        raise ValueError("A genre profile requires only Chinese samples with a matching domain")
     fingerprint_keys = ("id", "lang", "label", "split", "group_id", "input_sha256", "source", "source_url", "license", "dataset_revision", "writer_group", "domain", "training_overlap", "training_overlap_evidence")
     fingerprint_rows = [{k: r[k] for k in fingerprint_keys if k in r} for r in sorted(records, key=lambda r: r["id"])]
     fingerprint = hashlib.sha256(json.dumps(fingerprint_rows, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -209,10 +231,11 @@ def build_profile(records: list[dict], *, max_false_positive_rate: float = 0.20,
         overlap_status = "excluded" if all(r.get("training_overlap") == "excluded" and isinstance(r.get("training_overlap_evidence"), str) and r["training_overlap_evidence"].strip() for r in items) else "possible" if any(r.get("training_overlap") == "possible" for r in items) else "unknown"
         overlap_evidence = sorted({r["training_overlap_evidence"].strip() for r in items if isinstance(r.get("training_overlap_evidence"), str) and r["training_overlap_evidence"].strip()})
         fitted = fit_thresholds(calibration, max_false_positive_rate=max_false_positive_rate,
-                                max_false_negative_rate=max_false_negative_rate, confidence_level=confidence_level) if calibration else None
+                                max_false_negative_rate=max_false_negative_rate, confidence_level=confidence_level,
+                                genre=genre) if calibration else None
         if fitted is None:
             reasons.append("no calibration threshold pair meets Wilson error constraints")
-        test_metrics = threshold_metrics(test, fitted["low"], fitted["high"], confidence_level) if fitted else None
+        test_metrics = threshold_metrics(test, fitted["low"], fitted["high"], confidence_level, genre=genre) if fitted else None
         if fitted and not _fits_constraints(test_metrics, max_false_positive_rate, max_false_negative_rate):
             reasons.append("independent test Wilson upper bounds do not meet error constraints")
         binary_items = [r for r in items if r["label"] in {"human", "ai"}]
@@ -229,10 +252,14 @@ def build_profile(records: list[dict], *, max_false_positive_rate: float = 0.20,
                               "domains": sorted({r.get("domain", "unspecified") for r in items}),
                               "evaluation_unit": "document", "source_scope": "Only the manifest sources and lengths; no unseen author-group, essay-domain, newer-model, paragraph or sentence claim."},
             "calibration_metrics": fitted["metrics"] if fitted else None, "test_metrics": test_metrics,
+            **({"test_baseline_metrics": threshold_metrics(test, DEFAULT_LOW, DEFAULT_HIGH, confidence_level)}
+               if genre is not None else {}),
         }
-    return {"schema_version": 1, "profile_version": "thresholds-v1", "generated_at": datetime.now(timezone.utc).isoformat(),
+    return {"schema_version": 2 if genre is not None else 1,
+            "profile_version": "thresholds-zh-genre-v1" if genre is not None else "thresholds-v1",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "dataset_fingerprint": fingerprint, "score_semantics": "raw_model_score_not_authorship_probability",
             "evaluation_unit": "document", "fit_objective": "Minimize calibration binary uncertainty subject to Wilson upper-bound error constraints; mixed and independent test samples never fit thresholds.",
             "policy": {"max_false_positive_rate": max_false_positive_rate, "max_false_negative_rate": max_false_negative_rate,
                        "confidence_level": confidence_level, "min_samples_per_class": min_samples_per_class},
-            "languages": languages}
+            "languages": languages, **({"genre": genre} if genre is not None else {})}

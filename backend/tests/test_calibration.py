@@ -185,6 +185,30 @@ def test_exact_boundary_semantics_and_low_confidence_guard():
     assert lang["test_metrics"]["ai_uncertain"]["rate"] == 1
 
 
+def test_paper_profile_fits_and_evaluates_single_paragraphs_at_length_floor():
+    samples = records(lang="zh")
+    for r in samples:
+        r.update(domain="paper", confidence="low", char_count=400)
+    short_ai = next(r for r in samples if r["split"] == "test" and r["label"] == "ai")
+    short_ai["char_count"] = 399
+    profile = build_profile(samples, genre="paper")
+    assert profile["genre"] == "paper"
+    zh = profile["languages"]["zh"]
+    assert zh["status"] == "validated"
+    assert zh["calibration_metrics"]["ai_high"]["count"] == 30
+    assert zh["test_metrics"]["ai_high"]["count"] == 29
+    assert zh["test_metrics"]["ai_uncertain"]["count"] == 1
+    assert zh["test_baseline_metrics"]["ai_uncertain"]["count"] == 30
+    assert document_verdict(.9, "low", .4, .75, genre="composition", char_count=400) == "uncertain"
+
+
+@pytest.mark.parametrize("lang,domain", [("en", "paper"), ("zh", "composition"), ("zh", None)])
+def test_genre_profile_cannot_use_other_language_or_genre(lang, domain):
+    samples = [dict(r, domain=domain) for r in records(lang=lang)]
+    with pytest.raises(ValueError, match="matching domain"):
+        build_profile(samples, genre="paper")
+
+
 def test_descriptive_manifest_still_supported_but_cannot_fit_without_splits():
     validate_split_groups([{"id": "old"}])
     with pytest.raises(ValueError, match="split=calibration/test"):
