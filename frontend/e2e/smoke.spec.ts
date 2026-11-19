@@ -25,10 +25,21 @@ test("example text goes from paste to sentence-level result", async ({ page }) =
   await page.getByRole("button", { name: "开始检测" }).click();
 
   await expect(page.getByText("检测结果 · 英文")).toBeVisible();
-  await expect(page.getByText("全文 AI 率")).toBeVisible();
+  await expect(page.getByText("全文判定", { exact: true })).toBeVisible();
   // 逐句打分在分数之后另起请求，句子变成可点击的色块。
   await expect(page.locator("button.sent-button").first()).toBeVisible();
   await expect(page.getByText("全文分布 · 按模型档位")).toBeVisible();
+});
+
+test("short high-score text leads with uncertainty and explains why", async ({ page }) => {
+  await ready(page);
+  await pickLanguage(page, "英文");
+  await page.getByLabel("粘贴正文").fill(EN_FLAGGED + " We will review the notes tomorrow.");
+  await page.getByRole("button", { name: "开始检测" }).click();
+  await expect(page.locator(".result-score strong")).toHaveText("不确定");
+  await expect(page.locator(".result-raw-score")).toHaveText("模型原始分：95.0%");
+  await expect(page.locator(".verdict-reasons")).toContainText("未判为较高");
+  await expect(page.locator(".verdict-reasons")).toContainText("1 个段落");
 });
 
 test("flagged paragraph is marked high and can be rechecked after editing", async ({ page }) => {
