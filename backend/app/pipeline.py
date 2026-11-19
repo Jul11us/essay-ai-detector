@@ -84,9 +84,7 @@ def run_detect(
     threshold_basis = basis(
         model_id, lang, low_score=calibration["low"], high_score=calibration["high"], genre=applied_genre,
     )
-    interpretation = reading(agg)
-    if adjustment is not None:
-        interpretation += "\n" + adjustment["note"]
+    interpretation = reading(agg, adjustment)
     return {
         "score": agg.score,
         "verdict": agg.verdict,

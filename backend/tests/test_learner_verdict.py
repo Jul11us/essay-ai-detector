@@ -82,6 +82,20 @@ def test_pipeline_reuses_ui_reviews_and_preserves_scores():
         assert all(s["score"] == .1 for s in p["sentences"] if s["score"] is not None)
 
 
+@pytest.mark.parametrize("lang,single", [("zh", False), ("en", False), ("en", True)])
+def test_guard_reading_replaces_generic_uncertain_reason(lang, single):
+    text = TEXT.replace("\n\n", " ") if single else TEXT
+    if lang == "zh":
+        text = "学生回顾这次写作经历并举出具体细节。" * 25 + "\n\n" + "这段说明自己的观点并举出不同的例子。" * 25
+    result = run_detect(lang, text, None, None, lambda *_: .92,
+                        score_many=lambda queries, _: [.1] * len(queries))
+    assert result["score"] == .92 and result["verdict"] == "uncertain"
+    assert result["reading"] == result["verdict_adjustment"]["note"]
+    assert result["reading"] in result["explanation"]
+    assert "落在不确定区间" not in result["explanation"]
+    assert "文本偏短或段落太少" not in result["explanation"]
+
+
 @pytest.mark.parametrize("score", [.1, .6])
 def test_pipeline_non_high_does_not_score_sentences(score):
     result = run_detect("en", TEXT, None, None, lambda *_: score,

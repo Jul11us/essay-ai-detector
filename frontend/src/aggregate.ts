@@ -187,7 +187,7 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
       `不低于 ${(high * 100).toFixed(1)}% 且${doc.lang === "en" ? `参与评分的文字达到 ${SINGLE_PARAGRAPH_MIN_HIGH_CHARS} 字（单段也可）` : "文本充分度不是「低」"}才标较高。作文适用性仍需真实作文语料验证。`;
   }
   const outlook = reviewOutlook({ ...stats, paragraphs });
-  const reading = readingText(stats) + (adjustment ? "\n" + adjustment.note : "");
+  const reading = adjustment?.note ?? readingText(stats);
   return {
     ...doc,
     ...stats,
@@ -199,7 +199,7 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
     review_risk: outlook.risk,
     review_label: outlook.label,
     review: outlook.detail,
-    explanation: [basis, reading, outlook.label, outlook.detail].filter(Boolean).join("\n"),
+    explanation: [basis, reading, ...(adjustment ? [] : [outlook.label, outlook.detail])].filter(Boolean).join("\n"),
   };
 }
 

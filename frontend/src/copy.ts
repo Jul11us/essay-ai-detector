@@ -48,7 +48,9 @@ export function verdictReasons(data: DetectOk): { label: string; reasons: string
   const high = data.calibration?.applied ? data.calibration.high : 0.75;
   const pct = (n: number) => (n * 100).toFixed(1);
   const reasons = [`低于 ${pct(low)}% 为较低，${pct(low)}%–${pct(high)}% 为不确定，不低于 ${pct(high)}% 为较高（还需满足文本充分度条件）。`];
-  if (data.score >= high && data.verdict !== "high") {
+  if (data.verdict === "uncertain" && data.verdict_adjustment) {
+    reasons.push(data.verdict_adjustment.note);
+  } else if (data.score >= high && data.verdict !== "high") {
     reasons.push(`原始分已达较高门槛，但只有 ${data.char_count} 个已评分字符、${data.paragraphs.length} 个段落，文本充分度为「${CONF_LABEL[data.confidence]}」，所以未判为较高（一般需至少 400 字符且 2 段；单段满 400 字符的英文或论文也可）。`);
   } else if (data.score >= low && data.score < high) {
     reasons.push("原始分处于中间档，信号不够一边倒。请结合原句和上下文复核。");

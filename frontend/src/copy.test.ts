@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatResult, verdictReasons } from "./copy";
 import { buildReportHtml } from "./report";
+import { replaceParagraph } from "./aggregate";
 import type { DetectOk } from "./types";
 
 const data: DetectOk = {
@@ -52,5 +53,39 @@ describe("verdictReasons", () => {
       expect(output).toContain("只有 210 个已评分字符、1 个段落");
       expect(output).toContain("也不是判定档位");
     }
+  });
+
+  it.each(["en", "zh"] as const)("uses the %s guard reason in copied and HTML reports, including after retests", (lang) => {
+    const paragraph = { ...data.paragraphs[0], char_count: 400, score: .92,
+      sentences: [{ text: "Sentence.", score: .1, verdict: null, highlight: null }] };
+    const guarded: DetectOk = { ...data, lang, score: .92, char_count: 800,
+      confidence: lang === "en" ? "low" : "medium",
+      paragraphs: lang === "en" ? [{ ...paragraph, char_count: 800 }] : [paragraph, { ...paragraph, index: 1 }],
+      verdict_adjustment: { code: lang === "en" ? "en_sentence_median_guard" : "zh_medium_high_guard",
+        observed: lang === "en" ? .1 : .92, threshold: lang === "en" ? .3 : .925,
+        original_verdict: "high", verdict: "uncertain", note: "按保守复核规则降为不确定，原始分数不变。" },
+    };
+    const retested = replaceParagraph(guarded, 0, { ...guarded, paragraphs: [guarded.paragraphs[0]] });
+    for (const current of [guarded, retested]) {
+      const note = current.verdict_adjustment!.note;
+      expect(verdictReasons(current).reasons).toContain(note);
+      for (const output of [formatResult(current), buildReportHtml(current)]) {
+        expect(output).toContain(note);
+        expect(output).toContain("模型原始分：92.0%");
+        expect(output).not.toContain("原始分处于中间档");
+        expect(output).not.toContain("但只有");
+        expect(output).not.toContain("文本偏短或段落太少");
+      }
+    }
+    expect(retested.reading).toBe(retested.verdict_adjustment!.note);
+    expect(retested.explanation).not.toContain("材料偏短");
+  });
+
+  it("ignores a stale adjustment when the verdict is no longer uncertain", () => {
+    const result = verdictReasons({ ...data, verdict: "high", char_count: 800,
+      verdict_adjustment: { code: "en_sentence_median_guard", observed: .1, threshold: .3,
+        original_verdict: "high", verdict: "uncertain", note: "Stale guard reason" } });
+    expect(result.reasons.join(" ")).not.toContain("Stale guard reason");
+    expect(result.reasons.join(" ")).toContain("满足当前文本充分度条件");
   });
 });
