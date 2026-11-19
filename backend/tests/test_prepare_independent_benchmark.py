@@ -190,6 +190,44 @@ def test_sample_hash_matches_file_bytes_with_windows_text_newlines(tmp_path, mon
     assert b"\n" in data and b"\r\n" not in data
 
 
+@pytest.mark.parametrize("source", ["JTO", "Hans", "arXiv"])
+def test_ai_use_in_full_text_is_checked_for_every_source(source, pdf):
+    if source == "JTO":
+        parsed = prepare.parse_jto(jto(), "https://www.jto.ac.cn/paper1")
+    elif source == "Hans":
+        parsed = prepare.parse_hans(b"fixture PDF", "https://pdf.hanspub.org/paper.pdf")
+    else:
+        parsed, _ = prepare.parse_arxiv(FixtureHTTP(), {"arxiv_id": "2608.29463", "url": "https://arxiv.org/html/2608.29463v1"})
+    declaration = "The authors used ChatGPT for language editing."
+    assert declaration not in parsed["notice"] + parsed.get("declaration_text", "")
+    parsed["text"] += "\n" + declaration
+    assert "declared_ai_use" in prepare.qualify(parsed, "en" if source == "arXiv" else "zh")
+
+
+@pytest.mark.parametrize("declaration,expected", [
+    ("The authors used ChatGPT for language editing.", "declared_ai_use"),
+    ("The authors did not use any generative AI.", "declared_no_ai"),
+    ("", "none_found"),
+])
+def test_jto_linked_body_declarations_control_acceptance_and_manifest(tmp_path, declaration, expected):
+    class LinkedJTO(FixtureHTTP):
+        def get(self, url):
+            if url.endswith("/paper1"):
+                return jto("") + b"<script>open('article/fixture.shtml')</script>"
+            assert url == "https://www.jto.ac.cn/article/fixture.shtml"
+            return jto(ZH_BODY + "\n" + declaration)
+    seeds = seed_file(tmp_path, [("JTO", "https://www.jto.ac.cn/paper1")])
+    out = tmp_path / "out"
+    summary = prepare.collect(out, limit_en=0, limit_zh=1, fetcher=LinkedJTO(), seeds=seeds)
+    if expected == "declared_ai_use":
+        assert summary["accepted"]["zh"] == 0
+        assert summary["candidates"][0]["reasons"] == ["declared_ai_use"]
+        assert (out / "manifest.jsonl").read_bytes() == b""
+    else:
+        assert summary["accepted"]["zh"] == 1
+        assert benchmark.load_manifest(out / "manifest.jsonl")[0]["ai_use_declaration"] == expected
+
+
 def test_journal_cap_and_language_limit_are_audited(tmp_path):
     class DifferentPapers(FixtureHTTP):
         def get(self, url):

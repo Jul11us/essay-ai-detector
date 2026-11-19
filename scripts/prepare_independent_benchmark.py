@@ -233,6 +233,10 @@ def ai_declaration(text: str) -> str:
     return "none_found"
 
 
+def paper_ai_declaration(parsed: dict) -> str:
+    return ai_declaration(" ".join(parsed.get(key, "") for key in ("notice", "declaration_text", "text")))
+
+
 def chinese_date(text: str, label: str) -> str | None:
     match = re.search(label + r"\s*[:：]?\s*(\d{4})\s*[年/-]\s*(\d{1,2})\s*[月/-]\s*(\d{1,2})", text)
     if not match:
@@ -361,7 +365,7 @@ def qualify(parsed: dict, lang: str, since: str | None = None) -> list[str]:
         reasons.append("first_version_after_publication")
     if published and published > datetime.now(timezone.utc):
         reasons.append("future_publication")
-    if ai_declaration(parsed.get("declaration_text", parsed.get("notice", ""))) == "declared_ai_use":
+    if paper_ai_declaration(parsed) == "declared_ai_use":
         reasons.append("declared_ai_use")
     text = parsed.get("text", "")
     if len(normalize(text)) < 400:
@@ -440,7 +444,7 @@ def collect(out: Path, *, limit_en=10, limit_zh=20, since=None, offline=False, f
                              "author_names_sha256": digest(normalize(parsed["authors"])),
                              "first_version_at": parsed["first_version_at"], "published_at": parsed["published_at"],
                              "authorship_evidence": "publication_claim",
-                             "ai_use_declaration": ai_declaration(parsed.get("declaration_text", parsed["notice"])),
+                             "ai_use_declaration": paper_ai_declaration(parsed),
                              "consent_reference": None})
                 seen.add(normalized_hash)
                 accepted[lang] += 1
