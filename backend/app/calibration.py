@@ -7,7 +7,7 @@ import os
 import re
 from pathlib import Path
 
-from calibration import DEFAULT_HIGH, DEFAULT_LOW, ZH_GENRES, wilson_interval
+from calibration import DEFAULT_HIGH, DEFAULT_LOW, GENERIC_PROFILE_VERSION, ZH_GENRES, wilson_interval
 
 
 def _reject_constant(value: str):
@@ -144,6 +144,9 @@ def resolve_calibration(
                 raise ValueError("Invalid source metadata")
         if item.get("model_id") != model_id or not isinstance(revision, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", revision) or item.get("model_revision") != revision:
             decision.update(status="unvalidated", note="校准数据与当前模型版本不一致；当前使用默认展示门槛。")
+            return decision
+        if status == "validated" and lang == "en" and genre is None and profile.get("profile_version") != GENERIC_PROFILE_VERSION:
+            decision.update(status="unvalidated", note="校准文件早于英文单段判定规则，误报约束需要重新评测；当前使用默认展示门槛。")
             return decision
         if status != "validated":
             decision["note"] = "候选阈值尚未满足独立测试、样本量或来源核验要求；当前使用默认展示门槛。段落和句子着色尚未校准。"

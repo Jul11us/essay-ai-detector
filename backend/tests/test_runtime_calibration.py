@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app import calibration
 from app.model_artifacts import MODEL_IDS
-from calibration import wilson_interval
+from calibration import DEFAULT_HIGH, DEFAULT_LOW, wilson_interval
 
 REVISION = "sha256:" + "a" * 64
 
@@ -29,7 +29,7 @@ def valid_profile():
     metrics = {"human_high_false_flag": deepcopy(error_rate), "ai_low_miss": deepcopy(error_rate)}
     return {
         "schema_version": 1, "evaluation_unit": "document",
-        "profile_version": "test-v1", "dataset_fingerprint": "b" * 64,
+        "profile_version": "thresholds-v2", "dataset_fingerprint": "b" * 64,
         "score_semantics": "raw_model_score_not_authorship_probability",
         "policy": {"max_false_positive_rate": 0.20, "max_false_negative_rate": 0.20,
                    "confidence_level": 0.95, "min_samples_per_class": 30},
@@ -132,7 +132,7 @@ def test_malformed_or_oversized_profile_falls_back(tmp_path, monkeypatch, body):
 
 def test_json_float_overflow_cannot_leak_into_api_metadata(tmp_path, monkeypatch):
     path = tmp_path / "overflow.json"
-    body = json.dumps(valid_profile()).replace('"profile_version": "test-v1"', '"profile_version": 1e999')
+    body = json.dumps(valid_profile()).replace('"profile_version": "thresholds-v2"', '"profile_version": 1e999')
     path.write_text(body, encoding="utf-8")
     monkeypatch.setenv("DETECTOR_CALIBRATION_PATH", str(path))
     assert_defaults(resolve())
@@ -292,3 +292,12 @@ def test_genre_request_is_limited_to_complete_chinese_documents(fields):
         response = client.post("/api/detect", json={"lang": "zh", **fields})
     assert response.status_code == 400
     assert response.json()["error"] == "invalid_genre"
+
+
+def test_english_profile_fit_before_single_paragraph_rule_is_not_applied(tmp_path, monkeypatch):
+    profile = valid_profile()
+    profile["profile_version"] = "thresholds-v1"
+    install_profile(tmp_path, monkeypatch, profile)
+    result = resolve()
+    assert result["status"] == "unvalidated" and result["applied"] is False
+    assert (result["low"], result["high"]) == (DEFAULT_LOW, DEFAULT_HIGH)

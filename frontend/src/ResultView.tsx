@@ -109,7 +109,9 @@ export function ResultCard({
           <p className="result-kicker">检测结果 · {data.lang === "zh" ? "中文" : "英文"}</p>
           <h2>{headline}</h2>
           <p className="result-lead">{data.confidence === "low"
-            ? "文本偏短或只有一个段落，单个高分还不足以给出明确结论。请查看原句和上下文。"
+            ? data.verdict === "high"
+              ? "只有一个段落，文本充分度仍低；全文已达较高档，请对照原句和上下文人工复核。"
+              : "文本偏短或只有一个段落，单个高分还不足以给出明确结论。请查看原句和上下文。"
             : "请先看标记的原句和上下文。单个分数不能证明文字来源。"}</p>
           {data.mixed_variance && <p className="mix">各段差异较大，建议逐段查看。</p>}
         </div>

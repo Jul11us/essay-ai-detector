@@ -24,6 +24,12 @@ def fake_ghost(out, folder, index):
 
 
 def fake_fetch(out, name):
+    if name.startswith("detectrl_") and name != "detectrl_arxiv_test.json":
+        flat = lambda tag, i: f"{tag} {name} {i} " + "one long paragraph with steady detail " * 12
+        rows = [{"text": flat("human", i), "label": "human"} for i in range(6)]
+        rows += [{"text": flat("ai", i), "label": "llm", "llm_type": "ChatGPT", "data_type": "direct_prompt"} for i in range(6)]
+        rows += [{"text": essay("multi", i), "label": "human"} for i in range(3)]
+        return json.dumps(rows).encode()
     if name == "ellipse_train.csv":
         lines = ["text_id_kaggle,full_text,grade,prompt"]
         lines += [f'E{i},"{essay("ell", i)}",10,Prompt {i % 3}' for i in range(10)]
@@ -122,3 +128,18 @@ def test_truncated_ghostbuster_download_is_not_cached(tmp_path, monkeypatch):
     assert not (tmp_path / "raw" / "ghostbuster" / "human" / "1.txt").exists()
     monkeypatch.setattr(prepare.urllib.request, "urlopen", lambda *a, **k: _Response(b"complete", 8))
     assert prepare.fetch_ghostbuster(tmp_path, "human", 1) == "complete"
+
+
+def test_single_paragraph_set_is_test_only_and_single_paragraph(tmp_path):
+    items = prepare.select_single_paragraph(tmp_path, 5, fetch=lambda out, name: (
+        "text_id_kaggle,full_text,grade,prompt\n" + "\n".join(
+            f'S{i},"{"learner wrote one paragraph about school life " * 14}{i}",9,P' for i in range(6))).encode()
+        if name == "ellipse_train.csv" else fake_fetch(out, name), ellipse=4, per_domain=3)
+    summary = prepare.write_corpus(tmp_path, items, 5, split_note="test only")
+    rows = benchmark.load_manifest(tmp_path / "manifest.jsonl")
+    assert len(rows) == 4 + 3 * 2 * 3 and summary["split"] == "test only"
+    assert {r["split"] for r in rows} == {"test"}
+    assert {r["domain"] for r in rows} == {"composition", "news", "story", "review"}
+    for row in rows:
+        assert prepare.single_paragraph((tmp_path / row["file"]).read_text(encoding="utf-8"))
+        assert (row["label"] == "ai") == bool(row.get("generation_method"))

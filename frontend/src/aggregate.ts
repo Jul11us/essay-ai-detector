@@ -25,7 +25,10 @@ function pstdev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
-export function reaggregate(paragraphs: { score: number; char_count: number }[], thresholds?: { low: number; high: number }): {
+// 与后端 calibration._high_eligible 一致：英文单段达到 400 个已评分字符也可标较高，充分度仍为「低」。
+const SINGLE_PARAGRAPH_MIN_HIGH_CHARS = 400;
+
+export function reaggregate(paragraphs: { score: number; char_count: number }[], thresholds?: { low: number; high: number }, lang?: string): {
   score: number;
   verdict: Verdict;
   confidence: Confidence;
@@ -46,7 +49,8 @@ export function reaggregate(paragraphs: { score: number; char_count: number }[],
   const mixed_variance = std >= 0.25;
   let verdict: Verdict;
   if (score < (thresholds?.low ?? 0.4)) verdict = "low";
-  else if (score >= (thresholds?.high ?? 0.75) && confidence !== "low") verdict = "high";
+  else if (score >= (thresholds?.high ?? 0.75) &&
+    (confidence !== "low" || (lang === "en" && total >= SINGLE_PARAGRAPH_MIN_HIGH_CHARS))) verdict = "high";
   else verdict = "uncertain";
   return { score, verdict, confidence, mixed_variance, char_count: total };
 }
@@ -88,6 +92,13 @@ function reviewOutlook(result: {
   const caveat =
     "这只按本站开源模型估计，不是学校官方审查，也不能预测 Turnitin / 知网 / GPTZero 的结果。";
   if (result.confidence === "low") {
+    if (result.verdict === "high") {
+      return {
+        risk: "unclear",
+        label: "作业审查：全文达较高档，单段仍需人工复核",
+        detail: "单段材料的充分度仍低；请结合原文复核，不要据此认定生成。" + caveat,
+      };
+    }
     return {
       risk: "unclear",
       label: "作业审查：材料偏短，本站分数不稳",
@@ -132,14 +143,14 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
     calibration = { ...calibration, applied: false, low: 0.4, high: 0.75,
       note: "修改后文本长度超出校准样本范围；当前使用默认展示门槛。段落和句子着色尚未校准。" };
   }
-  const stats = reaggregate(paragraphs, calibration?.applied ? calibration : undefined);
+  const stats = reaggregate(paragraphs, calibration?.applied ? calibration : undefined, doc.lang);
   let basis = doc.basis;
   if (calibration && basis.includes("当前整篇档位：")) {
     const low = calibration.applied ? calibration.low : 0.4;
     const high = calibration.applied ? calibration.high : 0.75;
     basis = basis.split("当前整篇档位：")[0] +
       `当前整篇档位：低于 ${(low * 100).toFixed(1)}% 为较低，${(low * 100).toFixed(1)}%–${(high * 100).toFixed(1)}% 为不确定，` +
-      `不低于 ${(high * 100).toFixed(1)}% 且文本充分度不是「低」才标较高。作文适用性仍需真实作文语料验证。`;
+      `不低于 ${(high * 100).toFixed(1)}% 且${doc.lang === "en" ? `参与评分的文字达到 ${SINGLE_PARAGRAPH_MIN_HIGH_CHARS} 字（单段也可）` : "文本充分度不是「低」"}才标较高。作文适用性仍需真实作文语料验证。`;
   }
   const outlook = reviewOutlook({ ...stats, paragraphs });
   const reading = readingText(stats);
