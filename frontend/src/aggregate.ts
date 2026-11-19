@@ -186,9 +186,14 @@ export function replaceParagraph(doc: DetectOk, index: number, piece: DetectOk):
     ...incoming,
     ...doc.paragraphs.filter((p) => p.index > index),
   ].map((p, i) => ({ ...p, index: i }));
-  const next = applyStats(doc, paragraphs);
   const prior = doc.paragraphs.find((p) => p.index === index);
   const edited = incoming.map((p) => p.text || p.excerpt).join("\n\n") !== (prior?.text || prior?.excerpt);
+  const current = { ...doc };
+  if (edited) {
+    delete current.paraphrase_review;
+    delete current.second_opinion_score;
+  }
+  const next = applyStats(current, paragraphs);
   if (edited && next.detection_scope && !next.detection_scope.note.includes("正文已在复核中修改")) {
     next.detection_scope = { ...next.detection_scope, note: next.detection_scope.note + " 正文已在复核中修改并重测；以上段落和字符数量记录原文件的选择范围，当前分数对应报告中的修改后正文。" };
   }

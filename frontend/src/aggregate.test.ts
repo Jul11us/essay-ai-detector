@@ -55,6 +55,42 @@ describe("replaceParagraph", () => {
   });
 
   it.each([
+    [0.2, "low"],
+    [0.5, "uncertain"],
+    [0.9, "high"],
+  ] as const)("clears stale document review when paragraph text changes (%s)", (score, verdict) => {
+    const current = Object.assign(doc([
+      { index: 0, text: "Original body.", excerpt: "Same excerpt", score: 0.2, verdict: "low", char_count: 450 },
+    ]), {
+      paraphrase_review: true,
+      second_opinion_score: 0.9,
+      reading: "Second model note",
+      review_label: "Second model label",
+      review: "Second model warning",
+    });
+    const edited = doc([
+      { index: 0, text: "Edited body.", excerpt: "Same excerpt", score, verdict, char_count: 450 },
+    ]);
+    const next = replaceParagraph(current, 0, edited);
+    expect(next.verdict).toBe(verdict);
+    expect(next.score).toBe(score);
+    expect(next).not.toHaveProperty("paraphrase_review");
+    expect(next).not.toHaveProperty("second_opinion_score");
+    expect(next.reading).not.toBe(current.reading);
+    expect(next.review_label).not.toBe(current.review_label);
+    expect(next.review).not.toBe(current.review);
+    expect(next.explanation).not.toContain(current.reading);
+    expect(next.explanation).not.toContain(current.review_label);
+    expect(next.explanation).not.toContain(current.review);
+    expect(current.paraphrase_review).toBe(true);
+    expect(current.second_opinion_score).toBe(0.9);
+    const repeated = replaceParagraph(next, 0, edited);
+    expect(repeated.verdict).toBe(verdict);
+    expect(repeated).not.toHaveProperty("paraphrase_review");
+    expect(repeated).not.toHaveProperty("second_opinion_score");
+  });
+
+  it.each([
     [undefined, 0.2, "low"],
     [false, 0.2, "low"],
     [true, 0.5, "uncertain"],
