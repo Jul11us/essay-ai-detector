@@ -75,7 +75,13 @@ def snapshot(report: dict) -> dict:
 def compare(current: dict, baseline: dict) -> tuple[list[str], list[str]]:
     for key in ("schema_version", "sample_fingerprint", "models", "pinned_model_commits"):
         if current[key] != baseline.get(key):
-            raise ValueError(f"{key} mismatch; re-record baseline after reviewing the change")
+            # Show the new value: fingerprints are hashes, not text, and the log is the only place
+            # a reviewer can read them without a machine that has the real weights.
+            raise ValueError(
+                f"{key} mismatch (current {json.dumps(current[key], sort_keys=True)}, "
+                f"baseline {json.dumps(baseline.get(key), sort_keys=True)}); "
+                "re-record baseline after reviewing the change"
+            )
     failures, improvements = [], []
     for lang, c in current["languages"].items():
         b = baseline["languages"][lang]
@@ -110,6 +116,7 @@ def main() -> None:
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--record", action="store_true")
     args = parser.parse_args()
+    summary = ""
     try:
         current = snapshot(json.loads(args.report.read_text(encoding="utf-8")))
         summary = table(current)
@@ -138,6 +145,9 @@ def main() -> None:
         if not args.record and failures:
             raise SystemExit(1)
     except (ValueError, KeyError, TypeError, OSError) as exc:
+        # The counts are still worth seeing when the gate cannot compare them.
+        if summary:
+            print(summary)
         parser.exit(
             1, f"Accuracy gate error: {exc}; re-record baseline if inputs intentionally changed\n"
         )

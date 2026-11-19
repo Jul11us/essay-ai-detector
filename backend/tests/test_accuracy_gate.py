@@ -83,3 +83,26 @@ def test_order_independent_and_counts_only():
     data["records"].reverse()
     assert snapshot(data) == baseline
     assert "records" not in baseline
+
+
+def test_fingerprint_mismatch_names_the_new_value_and_still_prints_counts(tmp_path, capsys):
+    import json
+
+    import accuracy_gate
+
+    baseline = snapshot(report())
+    changed = report()
+    for record in changed["records"]:
+        record["model_revision"] = "weights-v2"
+    (tmp_path / "baseline.json").write_text(json.dumps(baseline), encoding="utf-8")
+    (tmp_path / "report.json").write_text(json.dumps(changed), encoding="utf-8")
+    with pytest.raises(ValueError, match='current .*"weights-v2".*baseline .*"weights-v1"'):
+        compare(snapshot(changed), baseline)
+    argv = ["accuracy_gate.py", str(tmp_path / "report.json"), "--baseline"]
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr("sys.argv", [*argv, str(tmp_path / "baseline.json")])
+        with pytest.raises(SystemExit) as stop:
+            accuracy_gate.main()
+    assert stop.value.code == 1
+    out = capsys.readouterr()
+    assert "| en | 6 (3/3) |" in out.out and "weights-v2" in out.err
