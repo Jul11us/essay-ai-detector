@@ -4,12 +4,13 @@ from dataclasses import dataclass
 from statistics import pstdev
 
 from app.length import count_chars, count_words
+from app.calibration_fit import DEFAULT_HIGH, DEFAULT_LOW, document_verdict
 
 
 # 判定门槛。尚未用带真值的样本校准，见 docs/benchmark.md。
 # 段落和整篇共用同一组，逐句着色的门槛在 sentences.py 里引用它。
-LOW_SCORE = 0.40
-HIGH_SCORE = 0.75
+LOW_SCORE = DEFAULT_LOW
+HIGH_SCORE = DEFAULT_HIGH
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def aggregate(
     *,
     low: float = LOW_SCORE,
     high: float = HIGH_SCORE,
+    genre: str | None = None,
 ) -> AggregateResult:
     if len(paragraphs) != len(probs):
         raise ValueError("paragraphs and probs length mismatch")
@@ -73,12 +75,9 @@ def aggregate(
     else:
         confidence = "medium"
     mixed_variance = std >= 0.25
-    if score < low:
-        verdict = "low"
-    elif score >= high and confidence != "low":
-        verdict = "high"
-    else:
-        verdict = "uncertain"
+    verdict = document_verdict(
+        score, confidence, low, high, genre=genre, char_count=n_chars, lang=lang
+    )
     items = tuple(
         ParagraphScore(
             index=i,

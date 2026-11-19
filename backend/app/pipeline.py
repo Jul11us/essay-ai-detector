@@ -34,6 +34,7 @@ def run_detect(
     length_floor: int | None = None,
     model_revision: str | None = None,
     calibration_scope: str = "document",
+    genre: str | None = None,
     extracted_override: ExtractedText | None = None,
 ) -> dict:
     lang = require_lang(lang)
@@ -65,11 +66,24 @@ def run_detect(
         model_revision,
         count_chars("".join(parts)),
         scope=calibration_scope,
+        genre=genre,
     )
-    agg = aggregate(parts, probs, lang, low=calibration["low"], high=calibration["high"])
+    applied_genre = genre if calibration["applied"] else None
+    agg = aggregate(
+        parts,
+        probs,
+        lang,
+        low=calibration["low"],
+        high=calibration["high"],
+        genre=applied_genre,
+    )
     outlook = review_outlook(agg)
     threshold_basis = basis(
-        model_id, lang, low_score=calibration["low"], high_score=calibration["high"]
+        model_id,
+        lang,
+        low_score=calibration["low"],
+        high_score=calibration["high"],
+        genre=applied_genre,
     )
     return {
         "score": agg.score,

@@ -6,6 +6,51 @@ on:
   pull_request:
 
 jobs:
+  accuracy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      HF_HOME: ${{ github.workspace }}/.hf-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r backend/requirements-torch.txt --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r backend/requirements-dev.txt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            experiments/models/vanguard
+            .hf-cache
+          key: accuracy-models-${{ runner.os }}-${{ hashFiles('backend/app/model_artifacts.py') }}
+      - name: Download pinned and checksum-verified models and samples
+        run: |
+          python experiments/download_model.py
+          PYTHONPATH=backend python -c 'from app.loader import ModelHub; ModelHub()._download_zh()'
+          python scripts/prepare_benchmark.py --pairs-per-language 50 --mixed-per-language 0 --seed 20261002 --out experiments/benchmark-private/accuracy-ci
+      - name: Start backend and require both models
+        run: |
+          python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 > backend-server.log 2>&1 &
+          python scripts/wait_accuracy_models.py
+      - name: Golden scores
+        run: python -m pytest -m golden -q
+        working-directory: backend
+      - name: Evaluate fixed samples
+        run: python backend/benchmark.py experiments/benchmark-private/accuracy-ci/manifest.jsonl --out experiments/benchmark-private/accuracy-ci/report.json
+      - name: Gate false flags and misses
+        run: python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accuracy-report
+          path: experiments/benchmark-private/accuracy-ci/report.json
+          if-no-files-found: warn
+
   backend:
     runs-on: ubuntu-latest
     defaults:

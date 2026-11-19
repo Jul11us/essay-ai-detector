@@ -266,3 +266,39 @@ describe("整篇逐句打分", () => {
     expect(merged.paragraphs[1].sentences).toBeNull();
   });
 });
+
+describe("English single-paragraph coverage", () => {
+  it("lets one long English paragraph reach high while confidence stays low", () => {
+    expect(reaggregate([{ score: 0.8, char_count: 400 }], undefined, "en")).toMatchObject({
+      verdict: "high",
+      confidence: "low",
+    });
+    expect(reaggregate([{ score: 0.8, char_count: 399 }], undefined, "en").verdict).toBe(
+      "uncertain",
+    );
+    expect(reaggregate([{ score: 0.8, char_count: 400 }], undefined, "zh").verdict).toBe(
+      "uncertain",
+    );
+    expect(reaggregate([{ score: 0.8, char_count: 400 }]).verdict).toBe("uncertain");
+  });
+
+  it("re-tested single English paragraph keeps the high verdict and a review caveat", () => {
+    const current = doc([
+      { index: 0, text: "Body.", excerpt: "Body.", score: 0.2, verdict: "low", char_count: 450 },
+    ]);
+    const piece = doc([
+      {
+        index: 0,
+        text: "Edited.",
+        excerpt: "Edited.",
+        score: 0.9,
+        verdict: "high",
+        char_count: 450,
+      },
+    ]);
+    const next = replaceParagraph(current, 0, piece);
+    expect(next.verdict).toBe("high");
+    expect(next.confidence).toBe("low");
+    expect(next.review_label).toContain("单段仍需人工复核");
+  });
+});

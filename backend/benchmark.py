@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from app.calibration_fit import build_profile, validate_split_groups
+from app.calibration_fit import ZH_GENRES, build_profile, validate_split_groups
 from app.evaluation_stats import LABELS, LANGS, summarize
 from app.evaluation_summary import render_summary
 
@@ -342,11 +342,18 @@ def main() -> None:
         type=Path,
         help="Fit on calibration split and validate on independent test split",
     )
+    parser.add_argument(
+        "--genre",
+        choices=ZH_GENRES,
+        help="Fit a genre-specific Chinese profile using the matching manifest domain",
+    )
     parser.add_argument("--max-false-positive-rate", type=float, default=0.20)
     parser.add_argument("--max-false-negative-rate", type=float, default=0.20)
     parser.add_argument("--confidence-level", type=float, default=0.95)
     parser.add_argument("--min-samples-per-class", type=int, default=30)
     args = parser.parse_args()
+    if args.genre and not args.calibration_out:
+        parser.error("--genre requires --calibration-out")
     rows = load_manifest(args.manifest)
     inference = None
     if args.predictions:
@@ -388,6 +395,7 @@ def main() -> None:
             max_false_negative_rate=args.max_false_negative_rate,
             confidence_level=args.confidence_level,
             min_samples_per_class=args.min_samples_per_class,
+            genre=args.genre,
         )
         report["calibration"] = {
             "dataset_fingerprint": profile["dataset_fingerprint"],

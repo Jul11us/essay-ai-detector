@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.aggregate import HIGH_SCORE, LOW_SCORE, AggregateResult
+from app.calibration_fit import PAPER_MIN_HIGH_CHARS
 
 NEAR_ZERO = 0.001
 
@@ -13,7 +14,12 @@ class ReviewOutlook:
 
 
 def basis(
-    model_id: str, lang: str, *, low_score: float = LOW_SCORE, high_score: float = HIGH_SCORE
+    model_id: str,
+    lang: str,
+    *,
+    low_score: float = LOW_SCORE,
+    high_score: float = HIGH_SCORE,
+    genre: str | None = None,
 ) -> str:
     if lang == "zh":
         engine = (
@@ -27,11 +33,16 @@ def basis(
             "依据是写作分布像不像常见 AI 稿，不是「抓到生成记录」，也不是知网 / Turnitin。"
         )
     low, high = round(low_score * 100, 1), round(high_score * 100, 1)
+    sufficient = (
+        f"参与评分的文字达到 {PAPER_MIN_HIGH_CHARS} 字（单段也可）"
+        if genre == "paper" or lang == "en"
+        else "文本充分度不是「低」"
+    )
     return (
         engine
         + "总分由各段按字数加权，避免只看开头。分数不是文章里 AI 所写的字数比例。"
         + f"当前整篇档位：低于 {low:g}% 为较低，{low:g}%–{high:g}% 为不确定，"
-        + f"不低于 {high:g}% 且文本充分度不是「低」才标较高。作文适用性仍需真实作文语料验证。"
+        + f"不低于 {high:g}% 且{sufficient}才标较高。作文适用性仍需真实作文语料验证。"
     )
 
 
@@ -69,6 +80,12 @@ def review_outlook(result: AggregateResult) -> ReviewOutlook:
         "这只按本站开源模型估计，不是学校官方审查，也不能预测 Turnitin / 知网 / GPTZero 的结果。"
     )
     if result.confidence == "low":
+        if result.verdict == "high":
+            return ReviewOutlook(
+                risk="unclear",
+                label="作业审查：全文达较高档，单段仍需人工复核",
+                detail="单段材料的充分度仍低；请结合原文复核，不要据此认定生成。" + caveat,
+            )
         return ReviewOutlook(
             risk="unclear",
             label="作业审查：材料偏短，本站分数不稳",

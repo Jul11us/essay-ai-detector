@@ -7,6 +7,7 @@ from app.calibration_fit import (
     build_profile,
     document_verdict,
     fit_thresholds,
+    threshold_metrics,
     validate_split_groups,
     wilson_interval,
 )
@@ -240,10 +241,73 @@ def test_exact_boundary_semantics_and_low_confidence_guard():
     data = records()
     for r in data:
         if r["label"] == "ai":
-            r["confidence"] = "low"
+            r.update(confidence="low", char_count=399)
     lang = build_profile(data)["languages"]["en"]
     assert lang["status"] == "validated"
     assert lang["test_metrics"]["ai_uncertain"]["rate"] == 1
+
+
+def test_paper_profile_fits_and_evaluates_single_paragraphs_at_length_floor():
+    samples = records(lang="zh")
+    for r in samples:
+        r.update(domain="paper", confidence="low", char_count=400)
+    short_ai = next(r for r in samples if r["split"] == "test" and r["label"] == "ai")
+    short_ai["char_count"] = 399
+    profile = build_profile(samples, genre="paper")
+    assert profile["genre"] == "paper"
+    zh = profile["languages"]["zh"]
+    assert zh["status"] == "validated"
+    assert zh["calibration_metrics"]["ai_high"]["count"] == 30
+    assert zh["test_metrics"]["ai_high"]["count"] == 29
+    assert zh["test_metrics"]["ai_uncertain"]["count"] == 1
+    assert zh["test_baseline_metrics"]["ai_uncertain"]["count"] == 30
+    assert (
+        document_verdict(0.9, "low", 0.4, 0.75, genre="composition", char_count=400) == "uncertain"
+    )
+
+
+def test_english_single_paragraph_rule_applies_in_replayed_metrics():
+    rows = [
+        {"label": "ai", "lang": "en", "score": 0.9, "confidence": "low", "char_count": 400},
+        {"label": "ai", "lang": "en", "score": 0.9, "confidence": "low", "char_count": 399},
+        {"label": "ai", "lang": "zh", "score": 0.9, "confidence": "low", "char_count": 400},
+    ]
+    assert threshold_metrics(rows, 0.4, 0.75)["ai_high"]["count"] == 1
+
+
+def test_composition_raises_only_high_boundary_to_avoid_new_ai_low_misses():
+    samples = records(60, lang="zh")
+    for r in samples:
+        r.update(domain="composition")
+        if r["label"] == "human":
+            r["score"] = 0.8
+        elif r["split"] == "test":
+            r["score"] = 0.7
+    zh = build_profile(samples, genre="composition")["languages"]["zh"]
+    assert zh["status"] == "validated"
+    assert zh["low"] == 0.4
+    assert 0.8 < zh["high"] <= 0.9
+    assert zh["test_baseline_metrics"]["human_high_false_flag"]["count"] == 60
+    assert zh["test_metrics"]["human_high_false_flag"]["count"] == 0
+    assert zh["test_metrics"]["ai_low_miss"]["count"] == 0
+    assert zh["test_metrics"]["ai_uncertain"]["count"] == 60
+
+
+def test_genre_fit_rejects_excess_ai_low_misses_at_default_boundary():
+    samples = [
+        dict(r, domain="paper", score=0.39 if r["label"] == "ai" else 0.2)
+        for r in records(lang="zh")
+    ]
+    zh = build_profile(samples, genre="paper")["languages"]["zh"]
+    assert zh["status"] == "unvalidated"
+    assert zh["low"] is None and zh["high"] is None
+
+
+@pytest.mark.parametrize("lang,domain", [("en", "paper"), ("zh", "composition"), ("zh", None)])
+def test_genre_profile_cannot_use_other_language_or_genre(lang, domain):
+    samples = [dict(r, domain=domain) for r in records(lang=lang)]
+    with pytest.raises(ValueError, match="matching domain"):
+        build_profile(samples, genre="paper")
 
 
 def test_descriptive_manifest_still_supported_but_cannot_fit_without_splits():
