@@ -1,5 +1,6 @@
 import type { Outcome } from "./aggregate";
 import { isBilingual, isSectionErr, type ScoreLang } from "./types";
+import { diffText } from "./versions";
 
 type Assessment = "supports" | "diverges" | "review" | "context";
 
@@ -31,6 +32,20 @@ function changedSpan(before: string, after: string) {
   };
 }
 
+function measureChanges(before: string, after: string) {
+  const span = changedSpan(before, after);
+  if (!span.removed || !span.added) return { ...span, contiguousAddition: !span.removed };
+
+  const { chunks, granular } = diffText(before, after);
+  if (!granular) return null;
+  let added = 0, removed = 0;
+  for (const chunk of chunks) {
+    if (chunk.kind === "add") added += chars(chunk.text);
+    if (chunk.kind === "remove") removed += chars(chunk.text);
+  }
+  return { added, removed, contiguousAddition: false };
+}
+
 export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence {
   const current = section(result, lang);
   const final = manuscript(current);
@@ -48,11 +63,13 @@ export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence
     if (before === null || after === null) break;
     if (before !== after) {
       if (event.kind !== "recheck") break;
-      const { added, removed } = changedSpan(before, after);
+      const changes = measureChanges(before, after);
+      if (!changes) break;
+      const { added, removed, contiguousAddition } = changes;
       if (added || removed) {
         // Only the latest text change can establish the share still present in the current draft.
         const afterSize = chars(after);
-        if (!count && !removed && added >= 200 && added * 2 >= afterSize) {
+        if (!count && contiguousAddition && added >= 200 && added * 2 >= afterSize) {
           return {
             kind: "bulk",
             share: added / afterSize,

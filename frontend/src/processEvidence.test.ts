@@ -39,6 +39,14 @@ describe("assessProcess", () => {
     expect(assessProcess(recheck(saved, addition.trim()), "en")).toEqual({ kind: "mixed", count: 2, assessment: "context" });
   });
 
+  it("does not count unchanged text between two distant corrections as rewritten", () => {
+    const source = "Thier plan was simple. " + body + " We returned to the libary.";
+    const initial = ensureVersions(doc(source));
+    const first = recheck(initial, source.replace("Thier", "Their").replace("libary", "library"));
+    const second = recheck(first, first.paragraphs[0].text!.replace("simple", "straightforward"));
+    expect(assessProcess(second, "en")).toEqual({ kind: "revisions", count: 2, assessment: "diverges" });
+  });
+
   it("does not count gaps, snapshot-only legacy history, missing full text, or restores", () => {
     const original = ensureVersions(doc(body));
     const revised = recheck(original, body + addition);
