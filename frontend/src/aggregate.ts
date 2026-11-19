@@ -150,6 +150,8 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
       note: "修改后文本长度超出校准样本范围；当前使用默认展示门槛。段落和句子着色尚未校准。" };
   }
   const stats = reaggregate(paragraphs, calibration?.applied ? calibration : undefined, doc.lang);
+  const paraphraseReview = doc.paraphrase_review === true && stats.verdict === "low";
+  if (paraphraseReview) stats.verdict = "uncertain";
   let basis = doc.basis;
   if (calibration && basis.includes("当前整篇档位：")) {
     const low = calibration.applied ? calibration.low : 0.4;
@@ -158,8 +160,10 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
       `当前整篇档位：低于 ${(low * 100).toFixed(1)}% 为较低，${(low * 100).toFixed(1)}%–${(high * 100).toFixed(1)}% 为不确定，` +
       `不低于 ${(high * 100).toFixed(1)}% 且${doc.lang === "en" ? `参与评分的文字达到 ${SINGLE_PARAGRAPH_MIN_HIGH_CHARS} 字（单段也可）` : "文本充分度不是「低」"}才标较高。作文适用性仍需真实作文语料验证。`;
   }
-  const outlook = reviewOutlook({ ...stats, paragraphs });
-  const reading = readingText(stats);
+  const outlook = paraphraseReview
+    ? { risk: doc.review_risk, label: doc.review_label, detail: doc.review }
+    : reviewOutlook({ ...stats, paragraphs });
+  const reading = paraphraseReview ? doc.reading : readingText(stats);
   return {
     ...doc,
     ...stats,

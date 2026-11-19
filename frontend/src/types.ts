@@ -47,6 +47,7 @@ export type DetectOk = {
   verdict: Verdict;
   confidence: Confidence;
   mixed_variance: boolean;
+  paraphrase_review?: boolean;
   char_count: number;
   word_count: number;
   model_id: string;
