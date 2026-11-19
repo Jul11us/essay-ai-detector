@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 
 from app.errors import DetectError
+from app.model_artifacts import MODEL_COMMITS, MODEL_IDS, MODEL_SHA256, verify_artifacts
 from app.model_identity import model_revision
 from app.sanity import check_zh_direction
 from app.scoring import (
@@ -12,7 +13,6 @@ from app.scoring import (
     EN_INFER_TOKENS,
     HEAD_SIGMOID,
     HEAD_SOFTMAX,
-    MODEL_IDS,
     resolve_ai_index,
     score_paragraph,
     score_short_texts,
@@ -64,6 +64,7 @@ class ModelHub:
         self._ai_index: dict[str, int | None] = {}
         self._max_length: dict[str, int] = {}
         self._stride: dict[str, int] = {}
+        self._boundaries: dict[str, tuple[int, int]] = {}
         self._label_check: dict[str, dict] = {}
         self._errors: dict[str, str] = {}
         self._runtimes = {"zh": "pytorch", "en": "pytorch"}
@@ -148,7 +149,7 @@ class ModelHub:
         try:
             self.detail = "正在准备中文模型…"
             path = self._download_zh()
-            self._load_softmax("zh", path, max_length=512, stride=256)
+            self._load_zh(path)
             self.detail = "正在核对中文分类头方向…"
             self._label_check["zh"] = check_zh_direction(lambda s: self._forward(s, "zh"))
             self.loaded["zh"] = True
@@ -161,8 +162,7 @@ class ModelHub:
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
         path = default_vanguard_path()
-        if not path.is_dir() or not (path / "config.json").exists():
-            raise FileNotFoundError(f"Vanguard weights not found: {path}")
+        verify_artifacts(path, "en")
         tok = AutoTokenizer.from_pretrained(str(path), local_files_only=True)
         onnx_model = self._maybe_onnx(path)
         if onnx_model is not None:
@@ -172,6 +172,7 @@ class ModelHub:
             model, loading = AutoModelForSequenceClassification.from_pretrained(
                 str(path),
                 local_files_only=True,
+                use_safetensors=True,
                 attn_implementation="eager",
                 reference_compile=False,
                 output_loading_info=True,
@@ -196,8 +197,8 @@ class ModelHub:
         override = os.environ.get("ZH_MODEL_PATH")
         if override:
             path = Path(override)
-            if path.is_dir() and (path / "config.json").exists():
-                return str(path)
+            verify_artifacts(path, "zh")
+            return str(path)
         from huggingface_hub import snapshot_download
 
         attempts: list[str] = []
@@ -207,44 +208,31 @@ class ModelHub:
             ("hf-mirror", {"endpoint": HF_MIRROR}),
         ):
             try:
-                return snapshot_download(repo_id=repo_id, **kwargs)
+                path = snapshot_download(
+                    repo_id=repo_id, revision=MODEL_COMMITS["zh"],
+                    allow_patterns=list(MODEL_SHA256["zh"]), **kwargs,
+                )
+                verify_artifacts(Path(path), "zh")
+                return path
             except Exception as exc:
                 attempts.append(f"{label}({type(exc).__name__})")
+        raise RuntimeError(
+            f"中文模型固定版本 {MODEL_COMMITS['zh'][:12]} 下载或校验失败："
+            + "、".join(attempts) + "。"
+        )
 
-        try:
-            from modelscope.hub.snapshot_download import snapshot_download as ms_download
-        except ImportError as exc:
-            raise RuntimeError(
-                "中文模型下载失败：已尝试 " + "、".join(attempts)
-                + "；ModelScope 兜底也不可用，因为当前环境没装 modelscope"
-                "（pip install modelscope）。"
-            ) from exc
-
-        try:
-            return ms_download(repo_id)
-        except Exception:
-            alt = "YuchuanTian/" + repo_id.split("/", 1)[-1]
-            attempts.append(f"ModelScope({repo_id})")
-            try:
-                return ms_download(alt)
-            except Exception as exc2:
-                attempts.append(f"ModelScope({alt})")
-                raise RuntimeError(
-                    "中文模型下载失败：已尝试 " + "、".join(attempts) + "。"
-                ) from exc2
-
-    def _load_softmax(self, lang: str, path: str, max_length: int, stride: int) -> None:
+    def _load_zh(self, path: str) -> None:
         import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-        tok = AutoTokenizer.from_pretrained(path)
-        extra = {}
-        if lang == "zh":
-            extra = {
-                "num_labels": 2,
-                "id2label": {0: "人类", 1: "AI"},
-                "label2id": {"人类": 0, "AI": 1},
-            }
+        lang = "zh"
+        tok = AutoTokenizer.from_pretrained(path, local_files_only=True)
+        extra = {
+            "num_labels": 2,
+            "id2label": {0: "人类", 1: "AI"},
+            "label2id": {"人类": 0, "AI": 1},
+            "local_files_only": True,
+        }
         onnx_model = self._maybe_onnx(Path(path))
         if onnx_model is not None:
             from transformers import AutoConfig
@@ -256,7 +244,7 @@ class ModelHub:
             self._runtimes[lang] = onnx_model.runtime
         else:
             model, loading = AutoModelForSequenceClassification.from_pretrained(
-                path, output_loading_info=True, **extra
+                path, output_loading_info=True, use_safetensors=False, **extra
             )
             assert_clean_loading(loading)
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -268,9 +256,14 @@ class ModelHub:
         self._models[lang] = model
         self._heads[lang] = HEAD_SOFTMAX
         self._ai_index[lang] = ai_index
-        self._max_length[lang] = max_length
-        self._stride[lang] = stride
-        self.revisions[lang] = model_revision(Path(path), self._runtimes[lang])
+        self._max_length[lang] = 512
+        self._stride[lang] = 256
+        # Transformers 5 no longer inserts these when building windows from raw IDs.
+        self._boundaries[lang] = (tok.cls_token_id, tok.sep_token_id)
+        self.revisions[lang] = model_revision(
+            Path(path), self._runtimes[lang], scoring_version="paragraph-weighted-zh-bert-v2",
+            weight_name="pytorch_model.bin",
+        )
 
     def _maybe_onnx(self, path: Path):
         """CPU 上如果旁边有导出的 ONNX，就用它。有显卡时仍走 PyTorch，避免改用 CPU ONNX。"""
@@ -300,6 +293,7 @@ class ModelHub:
             ai_index=self._ai_index[lang],
             max_length=self._max_length[lang],
             stride=self._stride[lang],
+            boundaries=self._boundaries.get(lang),
         )
 
     def score(self, text: str, lang: str) -> float:
@@ -318,4 +312,5 @@ class ModelHub:
             head=self._heads[lang],
             ai_index=self._ai_index[lang],
             max_length=self._max_length[lang],
+            boundaries=self._boundaries.get(lang),
         )

@@ -19,7 +19,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       # CPU 版 torch 比默认的 CUDA 版小得多；默认测试不加载模型权重。
-      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r requirements-torch.txt --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
 
@@ -50,7 +50,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       # 冒烟测试用假模型，不需要权重；后端依赖（含 CPU 版 torch）照常装。
-      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r backend/requirements-torch.txt --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -r backend/requirements.txt
       - uses: actions/setup-node@v4
         with:

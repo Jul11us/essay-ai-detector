@@ -2,7 +2,7 @@ import pytest
 
 from app.errors import DetectError
 from app.pipeline import run_detect
-from app.scoring import MODEL_IDS
+from app.model_artifacts import MODEL_IDS
 
 
 def fake_score(text: str, lang: str) -> float:
