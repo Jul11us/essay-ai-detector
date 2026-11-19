@@ -191,6 +191,24 @@ def test_api_failure_does_not_echo_response_or_exception(tmp_path, monkeypatch):
     assert str(error.value) == "h: API HTTP 500"
 
 
+@pytest.mark.parametrize("lang,domain,genre", [("zh", "composition", "composition"), ("zh", "paper", "paper"),
+                                               ("zh", "open_qa", None), ("en", "paper", None)])
+def test_api_forwards_only_chinese_composition_and_paper_genres(tmp_path, monkeypatch, lang, domain, genre):
+    file = tmp_path / "essay.txt"
+    file.write_text("sample", encoding="utf-8")
+    seen = []
+    real_client = httpx.Client
+    def handler(request):
+        seen.append(request.content)
+        return httpx.Response(200, json={"score": .8, "verdict": "high", "model_id": "model"})
+    monkeypatch.setattr("httpx.Client", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+    run_api([{"id": "sample", "lang": lang, "domain": domain, "_path": file}], "http://localhost:8000")
+    if genre:
+        assert f'name="genre"\r\n\r\n{genre}\r\n'.encode() in seen[0]
+    else:
+        assert b'name="genre"' not in seen[0]
+
+
 @pytest.mark.parametrize("url", ["https://example.com", "http://example.com", "http://127.0.0.1.example.com", "http://user:pass@127.0.0.1"])
 def test_api_rejects_nonlocal_hosts_and_credentials(url):
     with pytest.raises(ValueError, match="local HTTP"):

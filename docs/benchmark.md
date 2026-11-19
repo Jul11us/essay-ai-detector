@@ -63,16 +63,26 @@ manifest 可补充 `generation_method`（非空字符串）；报告记录保留
 
 HC3 使用 seed `20261002`、每语言 50 对完整回答（50 人写 + 50 AI），不生成混合稿；沿用上述来源和局限，不代表通用作文准确率。样本文本每次下载到 git-ignored 目录，不能提交。`backend/tests/accuracy_baseline.json` 只保存样本身份/内容哈希汇总、模型指纹和计数。报告只含 benchmark 白名单元数据、分数与计数，不含原文，作为 CI artifact 上传；门禁表写入 Actions summary。
 
-门禁逐语言比较：人写判 `high` 为 false flag；AI 判 **非 high（包含 uncertain）** 为 miss，与报告的 `ai_low_miss` 不同。不确定人写/AI 和低充分度 abstain 另列（可能重叠，不能相加）。固定常量 `accuracy_gate.TOLERANCE = 1` 允许每语言每指标最多增加 1 份，容纳跨机器浮点漂移；改善通过并提示更新基线。样本或模型指纹变化必须人工审核后重新录制，不可静默放行。
+C-ReD 作文和论文摘录另外下载固定修订 `b90072cd218b6ebdbd1d1478ce6e439677f18192` 的 8 个 CSV，逐文件校验 SHA-256。选择完全不读取模型分数：至少 400 个已评分非空白字符和 2 个评分段，再按固定种子 `zh-ci-investigation-v1` 的 ID 哈希排序；保留完整原文，不人为插入分段或拼接。长单段可能被现有流水线按 800 字上限拆成多个评分段。每文体目标 40 人写 + 40 AI，AI 在 DeepSeek-V3、GPT-4o、Qwen-3 间按 14/13/13 分配；不足 40 的类别只取现有覆盖合格样本，当前论文人写为 23 份，不补入低覆盖稿。任一类别可用样本少于 20 时准备失败。
+
+最初调查无法证明与 #4 拟合样本互斥；现已将提供的 1,440 行无原文排除清单提交为 `scripts/paper-composition-pr4-ci-exclusions.csv`，默认始终排除其 `(genre, original_id)`（包含同源的所有生成版本），并按原文 SHA-256 进一步排除，涵盖 pilot、calibration、confirmation。`--exclude extra.csv` 或 `--exclude extra.json` 可追加排除；CSV 使用同样列格式，JSON 为本脚本样本 ID 或原文 SHA-256 的数组。准备摘要报告剩余覆盖合格独立标题数及零原始 ID/哈希重叠。互斥结论限于已提供清单，不能据此排除模型训练重叠。
+
+**C-ReD 在该修订未发现数据集许可证；公开下载不等于再分发授权。** 每行记录缺失许可证说明及 `training_overlap: unknown`；CI 不上传 CSV、样本文本、题目或提示词，仅上传无原文报告。此固定集用于回归，不代表完整论文或未知生成器准确率，也不构成许可证或独立验证认证。
+
+门禁 schema v2 分别比较 `en`、`zh HC3`、`zh composition`、`zh paper`，不能用其他组的改善抵消退化。人写判 `high` 为 false flag；AI 判 **非 high（包含 uncertain）** 为 miss，与报告的 `ai_low_miss` 不同。不确定人写/AI 和低充分度 abstain 另列（可能重叠，不能相加）。固定常量 `accuracy_gate.TOLERANCE = 1` 允许每组每指标最多增加 1 份，容纳跨机器浮点漂移；改善通过并提示更新基线。样本（包括文体/分组）或模型指纹变化必须人工审核后重新录制，不可静默放行。两个报告的样本 ID 必须全局唯一。
+
+`benchmark.run_api` 仅为 `zh` 且 `domain` 为 `composition` / `paper` 的清单行传递 `genre`；HC3 和英文不变。仍不自动启用候选配置：仅未来显式配置并通过运行时核验的文体配置才会影响判定。目前没有随仓库发布或默认启用的真实文体配置，CI 使用默认门槛。准确率任务 CPU 运行，超时上限为 15 分钟。
 
 在已安装锁定依赖、真实权重且双模型已加载的本机，从仓库根目录运行：
 
 ```bash
 python scripts/prepare_benchmark.py --pairs-per-language 50 --mixed-per-language 0 --seed 20261002 --out experiments/benchmark-private/accuracy-ci
+python scripts/prepare_cred_benchmark.py --out experiments/benchmark-private/accuracy-cred
 python backend/benchmark.py experiments/benchmark-private/accuracy-ci/manifest.jsonl --out experiments/benchmark-private/accuracy-ci/report.json
-python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report.json --record
-# 再次独立运行 benchmark 后验证（不是重放旧预测）
-python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report.json
+python backend/benchmark.py experiments/benchmark-private/accuracy-cred/manifest.jsonl --out experiments/benchmark-private/accuracy-cred/report.json
+python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report.json experiments/benchmark-private/accuracy-cred/report.json --record
+# 再次独立运行上面两条 benchmark 命令后验证（不是重放旧预测）
+python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report.json experiments/benchmark-private/accuracy-cred/report.json
 ```
 
 重新录制前确认变化有意且已评审；提交 counts-only 基线 diff，不提交语料或原始文本。依赖/分段/阈值变化造成的退化也必须先调查，不应仅为变绿覆盖基线。
@@ -96,7 +106,7 @@ python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report
 ```json
 {
   "schema_version": 1,
-  "profile_version": "thresholds-v1",
+  "profile_version": "thresholds-v2",
   "dataset_fingerprint": "manifest-metadata-sha256",
   "evaluation_unit": "document",
   "score_semantics": "raw_model_score_not_authorship_probability",
@@ -137,6 +147,6 @@ python backend/benchmark.py paper.jsonl --genre paper --out paper-report.json \
   --calibration-out paper-profile.json --max-false-positive-rate 0.10 --max-false-negative-rate 0.10
 ```
 
-对作文另跑一遍 `--genre composition`。两种文体都保留默认较低门槛（0.40），不会把更多 AI 样本判为较低；仅在校准集上拟合不低于 0.75、满足误差约束的最小较高门槛。配置文件中的 `test_baseline_metrics` 和 `test_metrics` 分别报告默认和候选档位，按人写误报、AI 较高、AI 较低及不确定分开看。作文保留原充分度规则；论文可在至少 400 个已评分非空白字符时将单段标为较高，仍保留低充分度提示。只有经过相同规则评测的论文配置才能启用这个例外。
+对作文另跑一遍 `--genre composition`。两种文体都保留默认较低门槛（0.40），不会把更多 AI 样本判为较低；仅在校准集上拟合不低于 0.75、满足误差约束的最小较高门槛。配置文件中的 `test_baseline_metrics` 和 `test_metrics` 分别报告默认和候选档位，按人写误报、AI 较高、AI 较低及不确定分开看。作文保留原充分度规则；论文可在至少 400 个已评分非空白字符时将单段标为较高，仍保留低充分度提示。英文不分文体，同样可在至少 400 个已评分非空白字符时将单段标为较高（见 [英文评测](benchmark-english.md#single-paragraph-english-text)）。只有经过相同规则评测的论文配置才能启用这个例外。
 
 有充分来源证据且配置为 `validated` 时，本地后端可分别设置 `DETECTOR_ZH_COMPOSITION_CALIBRATION_PATH` 和 `DETECTOR_ZH_PAPER_CALIBRATION_PATH`。调用 `POST /api/detect` 时在 JSON 或文件表单中显式传 `lang=zh` 和 `genre=composition` 或 `genre=paper`；不会自动猜文体。段落重测、中英分开和选段上传不支持此字段。文体配置未提供、未验证或不适用于当前模型或长度时，仍使用默认门槛。不传 `genre` 时，现有通用配置行为不变；网页不自动启用这些配置。

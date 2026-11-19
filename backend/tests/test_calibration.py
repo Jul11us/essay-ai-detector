@@ -179,7 +179,7 @@ def test_exact_boundary_semantics_and_low_confidence_guard():
     data = records()
     for r in data:
         if r["label"] == "ai":
-            r["confidence"] = "low"
+            r.update(confidence="low", char_count=399)
     lang = build_profile(data)["languages"]["en"]
     assert lang["status"] == "validated"
     assert lang["test_metrics"]["ai_uncertain"]["rate"] == 1
@@ -200,6 +200,13 @@ def test_paper_profile_fits_and_evaluates_single_paragraphs_at_length_floor():
     assert zh["test_metrics"]["ai_uncertain"]["count"] == 1
     assert zh["test_baseline_metrics"]["ai_uncertain"]["count"] == 30
     assert document_verdict(.9, "low", .4, .75, genre="composition", char_count=400) == "uncertain"
+
+
+def test_english_single_paragraph_rule_applies_in_replayed_metrics():
+    rows = [{"label": "ai", "lang": "en", "score": .9, "confidence": "low", "char_count": 400},
+            {"label": "ai", "lang": "en", "score": .9, "confidence": "low", "char_count": 399},
+            {"label": "ai", "lang": "zh", "score": .9, "confidence": "low", "char_count": 400}]
+    assert threshold_metrics(rows, .4, .75)["ai_high"]["count"] == 1
 
 
 def test_composition_raises_only_high_boundary_to_avoid_new_ai_low_misses():

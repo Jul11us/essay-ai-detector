@@ -1,16 +1,16 @@
 {
-  "languages": {
+  "groups": {
     "en": {
       "abstain": 52,
       "ai": 50,
-      "ai_uncertain": 21,
-      "false_flags": 0,
+      "ai_uncertain": 2,
+      "false_flags": 1,
       "human": 50,
-      "human_uncertain": 3,
-      "misses": 23,
+      "human_uncertain": 2,
+      "misses": 4,
       "n": 100
     },
-    "zh": {
+    "zh HC3": {
       "abstain": 98,
       "ai": 50,
       "ai_uncertain": 50,
@@ -19,6 +19,26 @@
       "human_uncertain": 6,
       "misses": 50,
       "n": 100
+    },
+    "zh composition": {
+      "abstain": 0,
+      "ai": 40,
+      "ai_uncertain": 0,
+      "false_flags": 13,
+      "human": 40,
+      "human_uncertain": 16,
+      "misses": 0,
+      "n": 80
+    },
+    "zh paper": {
+      "abstain": 0,
+      "ai": 40,
+      "ai_uncertain": 0,
+      "false_flags": 1,
+      "human": 23,
+      "human_uncertain": 0,
+      "misses": 0,
+      "n": 63
     }
   },
   "models": {
@@ -35,6 +55,6 @@
     "en": "823061be63b90f2b42f64ac1e1f82772e872533b",
     "zh": "47695ff451b32c225dd938f4f478f7fdc6aa6bb0"
   },
-  "sample_fingerprint": "088bcdb6811106f5db442d707e5ad448be311a78159eb2af50674e1d05228fe2",
-  "schema_version": 1
+  "sample_fingerprint": "df9f6791bc541ec787e6df81c490d84dac7a14400a03c9a29067f6eab758fd1f",
+  "schema_version": 2
 }

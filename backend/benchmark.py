@@ -86,10 +86,13 @@ def run_api(rows: list[dict], base_url: str) -> list[dict]:
     with httpx.Client(base_url=base_url, timeout=660.0, follow_redirects=False, trust_env=False) as client:
         for row in rows:
             path = row["_path"]
+            data = {"lang": row["lang"]}
+            if row["lang"] == "zh" and row.get("domain") in ZH_GENRES:
+                data["genre"] = row["domain"]
             started = time.perf_counter()
             try:
                 with path.open("rb") as stream:
-                    response = client.post("/api/detect", data={"lang": row["lang"]}, files={"file": (path.name, stream)})
+                    response = client.post("/api/detect", data=data, files={"file": (path.name, stream)})
             except httpx.HTTPError:
                 raise RuntimeError(f"{row['id']}: local API request failed") from None
             elapsed_ms = round((time.perf_counter() - started) * 1000, 3)

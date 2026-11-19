@@ -71,7 +71,7 @@ def aggregate(
     else:
         confidence = "medium"
     mixed_variance = std >= 0.25
-    verdict = document_verdict(score, confidence, low, high, genre=genre, char_count=n_chars)
+    verdict = document_verdict(score, confidence, low, high, genre=genre, char_count=n_chars, lang=lang)
     items = tuple(
         ParagraphScore(
             index=i,

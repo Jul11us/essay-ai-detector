@@ -29,7 +29,7 @@ def basis(model_id: str, lang: str, *, low_score: float = LOW_SCORE, high_score:
     low, high = round(low_score * 100, 1), round(high_score * 100, 1)
     sufficient = (
         f"参与评分的文字达到 {PAPER_MIN_HIGH_CHARS} 字（单段也可）"
-        if genre == "paper" else "文本充分度不是「低」"
+        if genre == "paper" or lang == "en" else "文本充分度不是「低」"
     )
     return (
         engine
