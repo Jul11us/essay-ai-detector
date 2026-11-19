@@ -126,6 +126,8 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ### 中文作文与论文分别拟合
 
+中文论文候选当前未启用，见[论文试验结果与启用条件](paper-calibration-evidence.md)。
+
 命令行每次拟合一个文体。清单中的每条记录都须是 `lang: "zh"`，且 `domain` 与 `--genre composition` 或 `--genre paper` 一致。按题目或同一论文来源分组，不能把同题、同一原文的其他段落或 AI 版本拆开。应先冻结校准、测试分组及误报／漏报约束，再看测试结果：
 
 ```sh
