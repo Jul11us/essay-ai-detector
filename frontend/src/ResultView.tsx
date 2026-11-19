@@ -63,7 +63,11 @@ function ProcessAssessment({ evidence }: { evidence: ProcessEvidence }) {
   }[evidence.assessment];
   const reason = evidence.kind === "bulk"
     ? `最近一次有文字变化的重测中新增了一整块文字，约占当前正文的 ${Math.round(evidence.share * 100)}%。`
-    : `当前稿件可核对到 ${evidence.count} 次修改重测；${evidence.kind === "mixed" ? "其中有大幅改动，不能判断写作是逐步完成还是集中完成。" : "正文分多次修改，单看最终分数无法反映这些变化。"}`;
+    : `当前稿件可核对到 ${evidence.count} 次修改重测；${{
+      mixed: "其中有大幅改动，不能判断写作是逐步完成还是集中完成。",
+      unmeasured: "其中有改动超出精细对比范围，无法判断改动幅度。",
+      revisions: "正文分多次修改，单看最终分数无法反映这些变化。",
+    }[evidence.kind]}`;
   return <div className="process-assessment">
     <h3>写作过程辅助评估：{label}</h3>
     <p>{reason}</p>

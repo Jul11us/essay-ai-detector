@@ -7,7 +7,7 @@ type Assessment = "supports" | "diverges" | "review" | "context";
 export type ProcessEvidence = { kind: "none" }
   | { kind: "bulk"; assessment: Assessment; share: number }
   | { kind: "revisions"; assessment: Assessment; count: number }
-  | { kind: "mixed"; assessment: "context"; count: number };
+  | { kind: "mixed" | "unmeasured"; assessment: "context"; count: number };
 
 type Manuscript = { text: string; compact: string; wording: string };
 
@@ -64,6 +64,7 @@ export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence
   const events = new Map(result.writing_process?.events.map((event) => [event.version_id, event]));
   let count = 0;
   let largeChange = false;
+  let unmeasuredChange = false;
   for (let i = versions.length - 1; i > 0; i--) {
     const event = events.get(versions[i].id);
     if (event?.origin !== "action" || event.comparison_base_id !== versions[i - 1].id || event.kind === "restore") break;
@@ -72,9 +73,8 @@ export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence
     if (before.wording !== after.wording) {
       if (event.kind !== "recheck") break;
       const changes = measureChanges(before, after);
-      if (!changes) break;
-      const { added, removed, contiguousAddition } = changes;
-      if (added || removed) {
+      if (changes) {
+        const { added, removed, contiguousAddition } = changes;
         // Only the latest text change can establish the share still present in the current draft.
         const afterSize = chars(after.compact);
         if (!count && contiguousAddition && added >= 200 && added * 2 >= afterSize) {
@@ -85,12 +85,15 @@ export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence
           };
         }
         largeChange ||= Math.max(added, removed) >= 200 && Math.max(added, removed) * 2 >= afterSize;
-        count++;
+      } else {
+        unmeasuredChange = true;
       }
+      count++;
     }
     after = before;
   }
   if (count < 2) return { kind: "none" };
   if (largeChange) return { kind: "mixed", assessment: "context", count };
+  if (unmeasuredChange) return { kind: "unmeasured", assessment: "context", count };
   return { kind: "revisions", assessment: current.verdict === "high" ? "diverges" : "context", count };
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assessProcess } from "./processEvidence";
 import type { BilingualOk, DetectOk, Verdict } from "./types";
-import { appendVersion, ensureVersions, recordRecheck } from "./versions";
+import { appendVersion, diffText, ensureVersions, recordRecheck } from "./versions";
 
 const body = "On our way back from the lake, we compared the route on the paper map with the path we had walked. ".repeat(3).trim();
 const addition = " We stopped on the footbridge to sketch the bend in the river and mark the place where the trail became too muddy to follow.".repeat(3);
@@ -69,6 +69,17 @@ describe("assessProcess", () => {
       expect(assessProcess(revised, "en")).toEqual({ kind: "mixed", assessment: "context", count: 2 });
     },
   );
+
+  it("counts a rewrite with a complete snapshot even when the precise diff is over budget", () => {
+    const first = "我们沿河步行观察".repeat(100);
+    const second = "队员登山记录路线".repeat(100);
+    const chinese = (text: string): DetectOk => ({ ...doc(text), lang: "zh" });
+    const initial = ensureVersions(chinese(first));
+    const rewritten = recordRecheck(initial, chinese(second), "第 1 段重测");
+    const revised = recordRecheck(rewritten, chinese(second.replace("登山", "上坡")), "第 1 段重测");
+    expect(diffText(first, second).granular).toBe(false);
+    expect(assessProcess(revised, "zh")).toEqual({ kind: "unmeasured", assessment: "context", count: 2 });
+  });
 
   it("does not count gaps, snapshot-only legacy history, missing full text, or restores", () => {
     const original = ensureVersions(doc(body));
