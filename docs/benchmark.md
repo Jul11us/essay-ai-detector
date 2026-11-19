@@ -92,7 +92,7 @@ python backend/accuracy_gate.py experiments/benchmark-private/accuracy-ci/report
 ```json
 {
   "schema_version": 1,
-  "profile_version": "thresholds-v1",
+  "profile_version": "thresholds-v2",
   "dataset_fingerprint": "manifest-metadata-sha256",
   "evaluation_unit": "document",
   "score_semantics": "raw_model_score_not_authorship_probability",

@@ -15,6 +15,8 @@ from urllib.parse import urlsplit
 
 ZH_GENRES = ("composition", "paper")
 PAPER_MIN_HIGH_CHARS = 400
+# v2: English single paragraphs at the length floor can be judged high; v1 English fits predate that rule.
+GENERIC_PROFILE_VERSION = "thresholds-v2"
 DEFAULT_LOW = 0.40
 DEFAULT_HIGH = 0.75
 
@@ -269,7 +271,7 @@ def build_profile(records: list[dict], *, max_false_positive_rate: float = 0.20,
                if genre is not None else {}),
         }
     return {"schema_version": 2 if genre is not None else 1,
-            "profile_version": "thresholds-zh-genre-v1" if genre is not None else "thresholds-v1",
+            "profile_version": "thresholds-zh-genre-v1" if genre is not None else GENERIC_PROFILE_VERSION,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "dataset_fingerprint": fingerprint, "score_semantics": "raw_model_score_not_authorship_probability",
             "evaluation_unit": "document", "fit_objective": (
