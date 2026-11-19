@@ -20,6 +20,11 @@ LABELS = {"human", "ai", "mixed"}
 LANGS = {"en", "zh"}
 VERDICTS = {"low", "uncertain", "high"}
 CONFIDENCES = {"low", "medium", "high", "unknown"}
+PARAPHRASE_METHODS = {
+    name
+    for method in ("back_translation", "dipper", "polish")
+    for name in (method, f"paraphrase_{method}", f"paraphrase_{method}_llm")
+}
 
 
 def load_manifest(path: Path) -> list[dict]:
@@ -150,9 +155,12 @@ def make_records(rows: list[dict], predictions: list[dict]) -> list[dict]:
             "latency_ms": latency, "api_pipeline": p.get("api_pipeline", "unspecified"),
         }
         # Allowlist: never copy file/_path, raw text, API explanations or excerpts.
-        for key in ("source_url", "license", "domain", "dataset_revision", "generated_model", "mixed_method", "components", "training_overlap", "training_overlap_evidence"):
+        for key in ("source_url", "license", "domain", "dataset_revision", "generated_model", "mixed_method", "components", "training_overlap", "training_overlap_evidence",
+                    "generation_method", "source_key", "attack_type", "attack_method", "data_type", "llm_type", "grade", "prompt_name", "prompt_id"):
             if key in row:
                 record[key] = row[key]
+        if "generation_method" in record and (not isinstance(record["generation_method"], str) or not record["generation_method"].strip()):
+            raise ValueError(f"Invalid generation_method: {row['id']}")
         if row.get("_sha256"):
             record["input_sha256"] = row["_sha256"]
         records.append(record)
@@ -188,10 +196,26 @@ def length_bucket(record: dict) -> str:
     return "under_400_chars" if n < 400 else "400_to_1499_chars" if n < 1500 else "1500_plus_chars"
 
 
+def generation_counts(items: list[dict], confidence_level: float) -> dict:
+    result = counts(items, confidence_level)
+    result["verdicts"] = {verdict: sum(r["verdict"] == verdict for r in items) for verdict in ("low", "uncertain", "high")}
+    result["ai_not_high_miss"] = rate(
+        sum(r["label"] == "ai" and r["verdict"] != "high" for r in items),
+        sum(r["label"] == "ai" for r in items), confidence_level,
+    )
+    return result
+
+
 def summarize(rows: list[dict], predictions: list[dict], *, confidence_level: float = 0.95) -> dict:
     records = make_records(rows, predictions)
     groups: dict[str, list[dict]] = defaultdict(list)
+    methods: dict[str, list[dict]] = defaultdict(list)
+    families: dict[str, list[dict]] = defaultdict(list)
     for record in records:
+        method = record.get("generation_method", "unspecified")
+        methods[method].append(record)
+        family = "paraphrase" if method in PARAPHRASE_METHODS else "other" if "generation_method" in record else "unspecified"
+        families[family].append(record)
         bucket = length_bucket(record)
         for key in (f"lang:{record['lang']}", f"writer_group:{record['writer_group']}", f"length:{bucket}",
                     f"lang:{record['lang']}|length:{bucket}", f"lang:{record['lang']}|writer_group:{record['writer_group']}",
@@ -206,6 +230,8 @@ def summarize(rows: list[dict], predictions: list[dict], *, confidence_level: fl
         "interval_note": "Wilson intervals describe sample proportions, not population guarantees. Repeated versions in a group are correlated; inspect group counts and source scope.",
         "confidence_level": confidence_level, "overall": counts(records, confidence_level),
         "groups": {key: counts(items, confidence_level) for key, items in sorted(groups.items())},
+        "generation_methods": {key: generation_counts(items, confidence_level) for key, items in sorted(methods.items())},
+        "generation_families": {key: generation_counts(items, confidence_level) for key, items in sorted(families.items())},
         "latency": {"n": len(durations), "mean_ms": sum(durations) / len(durations) if durations else None,
                     "median_ms": (durations[(len(durations)-1)//2] + durations[len(durations)//2]) / 2 if durations else None,
                     "p95_ms": durations[max(0, math.ceil(len(durations) * 0.95)-1)] if durations else None,
