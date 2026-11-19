@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from math import isfinite
 
 from app.aggregate import aggregate
 from app.calibration import resolve_calibration
@@ -13,6 +14,7 @@ from app.markers import find_markers
 from app.model_artifacts import MODEL_IDS
 from app.paragraphs import prepare_scoring_text, split_paragraphs
 from app.rhythm import measure_rhythm
+from app.second_opinion import REVIEW_THRESHOLD
 
 ScoreFn = Callable[[str, str], float]
 
@@ -36,6 +38,7 @@ def run_detect(
     calibration_scope: str = "document",
     genre: str | None = None,
     extracted_override: ExtractedText | None = None,
+    second_score_fn: Callable[[str], float | None] | None = None,
 ) -> dict:
     lang = require_lang(lang)
     if extracted_override is not None:
@@ -72,7 +75,7 @@ def run_detect(
     threshold_basis = basis(
         model_id, lang, low_score=calibration["low"], high_score=calibration["high"], genre=applied_genre,
     )
-    return {
+    result = {
         "score": agg.score,
         "verdict": agg.verdict,
         "confidence": agg.confidence,
@@ -105,6 +108,27 @@ def run_detect(
             for p in agg.paragraphs
         ],
     }
+    if lang == "en" and calibration_scope == "document" and agg.verdict == "low" and second_score_fn is not None:
+        try:
+            second_score = second_score_fn(scored_text)
+            if second_score is None or not isfinite(second_score) or not 0 <= second_score <= 1:
+                return result
+        except DetectError as exc:
+            if exc.code == "cancelled":
+                raise
+            return result
+        except Exception:
+            return result
+        result["second_opinion_score"] = second_score
+        result["paraphrase_review"] = second_score >= REVIEW_THRESHOLD
+        if result["paraphrase_review"]:
+            note = "Vanguard 原始分仍较低；可选英文第二模型提示需人工复核，因此整篇改为不确定。这不是 AI 生成证据。"
+            result.update(
+                verdict="uncertain", reading=note, review_risk="unclear",
+                review_label="作业审查：英文第二模型建议复核", review=note,
+                explanation="\n".join([threshold_basis, note, calibration["note"]]),
+            )
+    return result
 
 
 ScoreManyFn = Callable[[list[str], str], list[float]]
