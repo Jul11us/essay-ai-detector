@@ -9,7 +9,7 @@ export type ProcessEvidence = { kind: "none" }
   | { kind: "revisions"; assessment: Assessment; count: number }
   | { kind: "mixed"; assessment: "context"; count: number };
 
-type Manuscript = { text: string; compact: string };
+type Manuscript = { text: string; compact: string; wording: string };
 
 function section(result: Outcome, lang: ScoreLang) {
   const part = isBilingual(result) ? result[lang] : result;
@@ -22,7 +22,11 @@ const chars = (text: string) => Array.from(withoutSpace(text)).length;
 function manuscript(result: ReturnType<typeof section>): Manuscript | null {
   if (!result?.paragraphs.length || result.paragraphs.some((p) => !p.text)) return null;
   const text = result.paragraphs.map((p) => p.text).join("\n\n");
-  return { text, compact: withoutSpace(text) };
+  const compact = withoutSpace(text);
+  const wording = result.lang === "en"
+    ? text.replace(/\s+/gu, " ").replace(/(?<![\p{L}\p{M}\p{N}]) | (?![\p{L}\p{M}\p{N}])/gu, "")
+    : compact;
+  return { text, compact, wording };
 }
 
 function changedSpan(before: string, after: string) {
@@ -38,7 +42,7 @@ function changedSpan(before: string, after: string) {
 
 function measureChanges(before: Manuscript, after: Manuscript) {
   const span = changedSpan(before.compact, after.compact);
-  if (!span.removed || !span.added) return { ...span, contiguousAddition: !span.removed };
+  if (span.added !== span.removed && (!span.removed || !span.added)) return { ...span, contiguousAddition: !span.removed };
 
   const { chunks, granular } = diffText(before.text, after.text);
   if (!granular) return null;
@@ -55,7 +59,7 @@ export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence
   const final = manuscript(current);
   const versions = result.version_history ?? [];
   let after = manuscript(section(versions.at(-1)?.result ?? result, lang));
-  if (!current || !final?.compact || final.compact !== after?.compact) return { kind: "none" };
+  if (!current || !final?.compact || final.wording !== after?.wording) return { kind: "none" };
 
   const events = new Map(result.writing_process?.events.map((event) => [event.version_id, event]));
   let count = 0;
@@ -65,7 +69,7 @@ export function assessProcess(result: Outcome, lang: ScoreLang): ProcessEvidence
     if (event?.origin !== "action" || event.comparison_base_id !== versions[i - 1].id || event.kind === "restore") break;
     const before = manuscript(section(versions[i - 1].result, lang));
     if (before === null || after === null) break;
-    if (before.compact !== after.compact) {
+    if (before.wording !== after.wording) {
       if (event.kind !== "recheck") break;
       const changes = measureChanges(before, after);
       if (!changes) break;

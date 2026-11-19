@@ -59,6 +59,17 @@ describe("assessProcess", () => {
     expect(assessProcess(result, "en")).toEqual({ kind: "bulk", share: expect.closeTo(.795, 3), assessment: "supports" });
   });
 
+  it.each([["footbridge", "foot bridge"], ["paper map", "papermap"]])(
+    "does not attribute an earlier bulk addition to a recheck that changes %s to %s",
+    (old, replacement) => {
+      const initial = ensureVersions(doc(body));
+      const appended = recheck(initial, body + addition);
+      expect(assessProcess(appended, "en")).toMatchObject({ kind: "bulk", assessment: "supports" });
+      const revised = recheck(appended, (body + addition).replace(old, replacement));
+      expect(assessProcess(revised, "en")).toEqual({ kind: "mixed", assessment: "context", count: 2 });
+    },
+  );
+
   it("does not count gaps, snapshot-only legacy history, missing full text, or restores", () => {
     const original = ensureVersions(doc(body));
     const revised = recheck(original, body + addition);
