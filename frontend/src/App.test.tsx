@@ -80,7 +80,7 @@ const SAMPLE: DetectOk = {
 describe("formatResult", () => {
   it("explains the raw score without a school outcome forecast", () => {
     const text = formatResult(SAMPLE);
-    expect(text).toContain("未经作文样本校准");
+    expect(text).toContain("未应用作文样本校准");
     expect(text).not.toContain("作业审查");
   });
 
@@ -186,7 +186,7 @@ describe("App 组件", () => {
     await readyAppWithText();
     await userEvent.click(screen.getByRole("button", { name: "开始检测" }));
 
-    expect(await screen.findByText("62.3%")).toBeInTheDocument();
+    expect(await screen.findByText("模型原始分：62.3%")).toBeInTheDocument();
     expect(detectCalls(fetchMock)).toHaveLength(1);
   });
 
@@ -425,11 +425,11 @@ describe("App 组件", () => {
     render(<App />);
     await readyAppWithText();
     await userEvent.click(screen.getByRole("button", { name: "开始检测" }));
-    expect((await screen.findAllByText("80.0%")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("模型原始分：80.0%")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "在此修改并重测本段" }));
     await userEvent.click(screen.getByRole("button", { name: "重测这一段" }));
-    expect((await screen.findAllByText("18.0%")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("模型原始分：18.0%")).toBeInTheDocument();
 
     const bodies = detectCalls(fetchMock).map((call) =>
       JSON.parse(String(call[1]?.body)),

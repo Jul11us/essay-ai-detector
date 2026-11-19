@@ -41,6 +41,29 @@ export const CONF_LABEL: Record<Confidence, string> = {
 export const AI_RATE_LABEL = "AI 率（模型估计）";
 export const AI_RATE_NOTE = "基于模型原始分数，未经作文样本校准；不代表 AI 所写字数占比。";
 
+export const RAW_SCORE_NOTE = "模型原始分不代表 AI 所写字数占比，也不是判定档位。";
+
+export function verdictReasons(data: DetectOk): { label: string; reasons: string[] } {
+  const low = data.calibration?.applied ? data.calibration.low : 0.4;
+  const high = data.calibration?.applied ? data.calibration.high : 0.75;
+  const pct = (n: number) => (n * 100).toFixed(1);
+  const reasons = [`低于 ${pct(low)}% 为较低，${pct(low)}%–${pct(high)}% 为不确定，不低于 ${pct(high)}% 为较高（还需满足文本充分度条件）。`];
+  if (data.score >= high && data.verdict !== "high") {
+    reasons.push(`原始分已达较高门槛，但只有 ${data.char_count} 个已评分字符、${data.paragraphs.length} 个段落，文本充分度为「${CONF_LABEL[data.confidence]}」，所以未判为较高（一般需至少 400 字符且 2 段；单段满 400 字符的英文或论文也可）。`);
+  } else if (data.score >= low && data.score < high) {
+    reasons.push("原始分处于中间档，信号不够一边倒。请结合原句和上下文复核。");
+  } else if (data.score < low) {
+    reasons.push("原始分低于较低门槛；这不是人类写作的证明。");
+  } else {
+    reasons.push("原始分达到较高门槛，且满足当前文本充分度条件；这不是生成证据。");
+  }
+  const hot = data.paragraphs.filter((p) => p.verdict === "high").length;
+  if (hot) reasons.push(`${data.paragraphs.length} 段中有 ${hot} 段为较高，请优先对照原文复核。`);
+  if (data.mixed_variance) reasons.push("各段差异大，不宜只看一个总分。");
+  if (!data.calibration?.applied) reasons.push("当前使用默认阈值，未应用作文样本校准。");
+  return { label: VERDICT_LABEL[data.verdict], reasons };
+}
+
 export function formatPercent(score: number): string {
   const p = score * 100;
   if (p < 0.05) return "<0.1";
@@ -66,11 +89,13 @@ export function formatResult(r: DetectOk): string {
   const lines = [
     `语言：${lang}`,
     `模型：${r.model_id}`,
-    `${AI_RATE_LABEL}：${formatPercent(r.score)}%（${VERDICT_LABEL[r.verdict]}；未经作文样本校准）`,
-    AI_RATE_NOTE,
+    `全文判定：${verdictReasons(r).label}`,
+    `模型原始分：${formatPercent(r.score)}%`,
+    RAW_SCORE_NOTE,
     `文本充分度：${CONF_LABEL[r.confidence]}（只由文本长度和段落分数计算）`,
     compositionLine(r),
     "判定依据：",
+    ...verdictReasons(r).reasons.map((reason) => `- ${reason}`),
     r.basis || r.explanation,
     "这个数字表示什么：",
     r.reading || "",
