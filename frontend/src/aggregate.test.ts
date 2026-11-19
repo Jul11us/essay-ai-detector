@@ -46,6 +46,7 @@ describe("replaceParagraph", () => {
       { index: 0, excerpt: "a", score: 0.65, verdict: "uncertain", char_count: 400 },
       { index: 1, excerpt: "b", score: 0.65, verdict: "uncertain", char_count: 400 },
     ]);
+    current.lang = "zh";
     current.calibration = { status: "validated", applied: true, low: 0.2, high: 0.6,
       evaluation_unit: "document", note: "测试范围内", applicability: { char_count: { min: 500, max: 1600 } } };
     const next = replaceParagraph(current, 1, doc([current.paragraphs[1]]));
@@ -183,10 +184,88 @@ describe("English single-paragraph coverage", () => {
 
   it("re-tested single English paragraph keeps the high verdict and a review caveat", () => {
     const current = doc([{ index: 0, text: "Body.", excerpt: "Body.", score: .2, verdict: "low", char_count: 450 }]);
-    const piece = doc([{ index: 0, text: "Edited.", excerpt: "Edited.", score: .9, verdict: "high", char_count: 450 }]);
+    const piece = doc([{ index: 0, text: "Edited.", excerpt: "Edited.", score: .9, verdict: "high", char_count: 450,
+      sentences: [{ text: "Edited.", score: .3, verdict: "low", highlight: null }] }]);
     const next = replaceParagraph(current, 0, piece);
     expect(next.verdict).toBe("high");
     expect(next.confidence).toBe("low");
     expect(next.review_label).toContain("单段仍需人工复核");
+  });
+});
+
+describe("paragraph retest document guards", () => {
+  const paragraph = (score = .9, sentenceScores: (number | null)[] | null = [.2]) => ({
+    index: 0, excerpt: "Body.", text: "Body.", score, verdict: "high" as const, char_count: 400,
+    sentences: sentenceScores?.map((value) => ({ text: "Sentence.", score: value, verdict: null, highlight: null })) ?? null,
+  });
+
+  it.each([
+    [[.1, .4998], "uncertain"], [[.1, .5], "high"], [[.3], "high"],
+    [[null], "uncertain"], [[], "uncertain"], [null, "uncertain"],
+  ] as const)("uses the complete sentence median for %j", (scores, verdict) => {
+    const piece = doc([paragraph(.9, scores === null ? null : [...scores])]);
+    const next = replaceParagraph(piece, 0, piece);
+    expect(next.verdict).toBe(verdict);
+    expect(next.score).toBe(.9);
+    expect(next.paragraphs[0].verdict).toBe("high");
+    expect(next.paragraphs[0].sentences).toEqual(piece.paragraphs[0].sentences);
+    if (verdict === "uncertain") {
+      expect(next.verdict_adjustment?.code).toBe("en_sentence_median_guard");
+      expect(next.reading).toContain(next.verdict_adjustment!.note);
+    } else expect(next.verdict_adjustment).toBeNull();
+  });
+
+  it("does not use an incomplete or failed review to restore high after an edit", () => {
+    for (const missing of [null, []]) {
+      const current = doc([paragraph(.9, [.9]), { ...paragraph(.9, missing), index: 1 }]);
+      const next = replaceParagraph(current, 0, doc([paragraph(.9, [.9])]));
+      expect(next.verdict).toBe("uncertain");
+      expect(next.verdict_adjustment).toMatchObject({ pending_sentences: true, observed: null });
+      expect(next.reading).toContain("重新检测整篇");
+    }
+  });
+
+  it("guards the effective default thresholds when a candidate profile is not applied", () => {
+    const current = doc([paragraph(), { ...paragraph(), index: 1 }]);
+    current.lang = "zh";
+    current.calibration = { status: "candidate", applied: false, low: .2, high: .6, note: "", evaluation_unit: "document" };
+    const next = replaceParagraph(current, 0, doc([current.paragraphs[0]]));
+    expect(next.score).toBe(.9);
+    expect(next.verdict).toBe("uncertain");
+    expect(next.verdict_adjustment?.code).toBe("zh_medium_high_guard");
+  });
+
+  it.each([
+    [.9249, "medium", null, false, "uncertain"], [.925, "medium", null, false, "high"],
+    [.9, "high", null, false, "high"], [.9, "medium", "paper", false, "high"],
+    [.9, "medium", null, true, "high"],
+  ] as const)("preserves the Chinese boundary and exemptions: %j %s %s %s", (score, confidence, genre, applied, verdict) => {
+    const size = confidence === "high" ? 800 : 400;
+    const current = doc([{ ...paragraph(score), char_count: size }, { ...paragraph(score), index: 1, char_count: size }]);
+    current.lang = "zh";
+    current.calibration = { status: applied ? "validated" : "default", applied, low: .4, high: .75, genre, note: "", evaluation_unit: "document" };
+    const next = replaceParagraph(current, 0, doc([current.paragraphs[0]]));
+    expect(next.verdict).toBe(verdict);
+    expect(next.confidence).toBe(confidence);
+    expect(next.score).toBe(score);
+    expect(next.paragraphs).toEqual(current.paragraphs);
+    expect(next.verdict_adjustment?.code ?? null).toBe(verdict === "uncertain" ? "zh_medium_high_guard" : null);
+  });
+
+  it("only demotes a raw high, never changes low/uncertain or retains a stale reason", () => {
+    for (const lang of ["en", "zh"] as const) for (const score of [0, .3999, .4, .7499, .75, .9, .925, 1]) {
+      for (const size of [100, 400, 800]) for (const sentences of [null, [], [null], [.1], [.3], [.9]]) {
+        const current = doc([{ ...paragraph(score, sentences), char_count: size }, { ...paragraph(score, sentences), index: 1, char_count: size }]);
+        current.lang = lang;
+        current.verdict_adjustment = { code: "en_sentence_median_guard", observed: .1, threshold: .3, original_verdict: "high", verdict: "uncertain", note: "stale" };
+        const base = reaggregate(current.paragraphs, undefined, lang);
+        const next = replaceParagraph(current, 0, doc([current.paragraphs[0]]));
+        expect(next.score).toBe(base.score);
+        expect(next.confidence).toBe(base.confidence);
+        expect(next.verdict === base.verdict || (base.verdict === "high" && next.verdict === "uncertain")).toBe(true);
+        expect(next.reading).not.toContain("stale");
+        if (next.verdict === base.verdict) expect(next.verdict_adjustment).toBeNull();
+      }
+    }
   });
 });

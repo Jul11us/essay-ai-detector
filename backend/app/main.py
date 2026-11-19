@@ -150,6 +150,7 @@ def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=
         calibration_scope="paragraph" if floor is not None else "document",
         genre=genre,
         extracted_override=extracted,
+        score_many=cancellable(hub.score_many, cancel),
     )
     if coverage is not None:
         result["detection_scope"] = coverage
