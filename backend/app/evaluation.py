@@ -33,6 +33,15 @@ class Sample(BaseModel):
     dataset_revision: Short | None = None
     generated_model: Short | None = None
     mixed_method: Short | None = None
+    generation_method: Short | None = None
+    source_key: Short | None = None
+    attack_type: Short | None = None
+    attack_method: Short | None = None
+    data_type: Short | None = None
+    llm_type: Short | None = None
+    grade: Short | Annotated[int, Field(strict=True)] | None = None
+    prompt_name: Short | None = None
+    prompt_id: Short | Annotated[int, Field(strict=True)] | None = None
     training_overlap: Literal["unknown", "possible", "excluded"] = "unknown"
     training_overlap_evidence: Annotated[str, Field(max_length=4000)] | None = None
     text_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")] | None = None
@@ -43,7 +52,7 @@ class Sample(BaseModel):
     ai_use_declaration: Literal["none_found", "declared_no_ai", "declared_ai_use"] | None = None
     consent_reference: Short | None = None
 
-    @field_validator("id", "source", "group_id", "writer_group", "license", "domain")
+    @field_validator("id", "source", "group_id", "writer_group", "license", "domain", "generation_method")
     @classmethod
     def nonblank(cls, value):
         if value is not None and not value.strip():

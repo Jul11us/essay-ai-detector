@@ -41,6 +41,10 @@ API 只允许 `http://127.0.0.1` 或 `http://localhost`，禁用代理环境变�
 
 报告给出总体，以及按语言、处理后字符长度、作者来源组别、split 和交叉分组的计数。字符长度分为 `<400`、`400–1499`、`≥1500`，与充分度长度门槛对应。未知长度单列，不猜测原稿长度。
 
+manifest 可补充 `generation_method`（非空字符串）；报告记录保留它以及白名单中的 `source_key`、`attack_type`、`attack_method`、`data_type`、`llm_type`、`grade`、`prompt_name`、`prompt_id` 等来源信息，不复制任意 `attack_*` / `source_*` 字段或正文。新增 `generation_methods` 按原始方法分组，`generation_families` 将回译、DIPPER、polish 的 `paraphrase_*_llm`、`paraphrase_*` 及短名归为 `paraphrase`，其他已标注方法归为 `other`，缺失方法归为 `unspecified`，不从文本或文件名推断攻击。
+
+这两种分组保留原有计数，并增加 `verdicts` 的 low/uncertain/high 零填充计数和 `ai_not_high_miss`（AI 稿判非 high / AI 样本数）；原有 `ai_low_miss` 仍仅计 AI-low。混合稿和人写稿不进入 AI 漏报分母。新增字段不改变既有总体字段或 CI 门禁，旧 manifest、预测与报告仍兼容。候选规则及未上线原因见[英文释义改写鲁棒性评测](paraphrase-evaluation.md)。
+
 | 指标 | 分子 / 分母 | 意义 |
 | --- | --- | --- |
 | `human_high_false_flag` | 人写稿判较高 / 人写样本数 | 误报 |
@@ -135,6 +139,8 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 没有合格的真实验证结果时，完成评测和生成候选配置仍有价值，但不应宣称已经提高准确率或已取得生产可用阈值。实际本机结果保存在语料目录的 `summary.md`，与原始预测、完整报告和配置一起复核。
 
 ### 中文作文与论文分别拟合
+
+中文论文候选当前未启用，见[论文试验结果与启用条件](paper-calibration-evidence.md)。
 
 命令行每次拟合一个文体。清单中的每条记录都须是 `lang: "zh"`，且 `domain` 与 `--genre composition` 或 `--genre paper` 一致。按题目或同一论文来源分组，不能把同题、同一原文的其他段落或 AI 版本拆开。应先冻结校准、测试分组及误报／漏报约束，再看测试结果：
 

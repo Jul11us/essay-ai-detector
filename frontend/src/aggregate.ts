@@ -55,7 +55,7 @@ export function reaggregate(paragraphs: { score: number; char_count: number }[],
   return { score, verdict, confidence, mixed_variance, char_count: total };
 }
 
-function readingText(result: { score: number; verdict: Verdict }): string {
+function readingText(result: { score: number; verdict: Verdict; confidence: Confidence }): string {
   if (result.score < NEAR_ZERO) {
     return (
       "接近 0% 只说明：在本模型看来，这篇更像它训练时见过的人类写法，原始分数小到四舍五入会显示成 0% 或 <0.1%。" +
@@ -73,6 +73,12 @@ function readingText(result: { score: number; verdict: Verdict }): string {
     return (
       "较高表示模型认为用词和句式更像常见 AI 输出（往往更平滑、模板感更强）。" +
       "这仍可能是人写的工整学术腔，也可能是生成后再微调。不要单凭总分认定学术不端，先看高分段在说什么。"
+    );
+  }
+  if (result.confidence === "low") {
+    return (
+      "文本偏短或段落太少，原始分再高也不足以给出明确结论，所以判为不确定。" +
+      "原始分不是 AI 所写字数占比；请对照原句和上下文复核，或补充更完整的文本后再测。"
     );
   }
   return (
