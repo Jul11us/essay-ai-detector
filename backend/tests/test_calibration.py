@@ -202,6 +202,32 @@ def test_paper_profile_fits_and_evaluates_single_paragraphs_at_length_floor():
     assert document_verdict(.9, "low", .4, .75, genre="composition", char_count=400) == "uncertain"
 
 
+def test_composition_raises_only_high_boundary_to_avoid_new_ai_low_misses():
+    samples = records(60, lang="zh")
+    for r in samples:
+        r.update(domain="composition")
+        if r["label"] == "human":
+            r["score"] = .8
+        elif r["split"] == "test":
+            r["score"] = .7
+    zh = build_profile(samples, genre="composition")["languages"]["zh"]
+    assert zh["status"] == "validated"
+    assert zh["low"] == .4
+    assert .8 < zh["high"] <= .9
+    assert zh["test_baseline_metrics"]["human_high_false_flag"]["count"] == 60
+    assert zh["test_metrics"]["human_high_false_flag"]["count"] == 0
+    assert zh["test_metrics"]["ai_low_miss"]["count"] == 0
+    assert zh["test_metrics"]["ai_uncertain"]["count"] == 60
+
+
+def test_genre_fit_rejects_excess_ai_low_misses_at_default_boundary():
+    samples = [dict(r, domain="paper", score=.39 if r["label"] == "ai" else .2)
+               for r in records(lang="zh")]
+    zh = build_profile(samples, genre="paper")["languages"]["zh"]
+    assert zh["status"] == "unvalidated"
+    assert zh["low"] is None and zh["high"] is None
+
+
 @pytest.mark.parametrize("lang,domain", [("en", "paper"), ("zh", "composition"), ("zh", None)])
 def test_genre_profile_cannot_use_other_language_or_genre(lang, domain):
     samples = [dict(r, domain=domain) for r in records(lang=lang)]

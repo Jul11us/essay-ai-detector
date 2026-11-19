@@ -99,7 +99,7 @@ def _fits_constraints(metrics: dict, max_fp: float, max_fn: float) -> bool:
 def fit_thresholds(records: list[dict], *, max_false_positive_rate: float = 0.20,
                    max_false_negative_rate: float = 0.20, confidence_level: float = 0.95,
                    genre: str | None = None) -> dict | None:
-    """Fit only calibration binary samples, minimizing uncertainty under error CIs."""
+    """Fit calibration binary samples under error CIs; genre fits preserve the low band."""
     if any(r.get("split") != "calibration" for r in records):
         raise ValueError("Threshold fitting accepts only calibration records")
     for r in records:
@@ -113,10 +113,21 @@ def fit_thresholds(records: list[dict], *, max_false_positive_rate: float = 0.20
     n_human = sum(r["label"] == "human" for r in binary)
     if not n_human or not ai:
         return None
+    candidates = {r["score"] for r in binary} | {math.nextafter(r["score"], 1.0) for r in binary if r["score"] < 1.0}
+    if genre is not None:
+        if wilson_interval(bisect_left(ai, DEFAULT_LOW), len(ai), confidence_level)[1] > max_false_negative_rate:
+            return None
+        for high in sorted(candidates | {DEFAULT_HIGH, 1.0}):
+            if high < DEFAULT_HIGH:
+                continue
+            fp = len(human) - bisect_left(human, high)
+            if wilson_interval(fp, n_human, confidence_level)[1] <= max_false_positive_rate:
+                return {"low": DEFAULT_LOW, "high": high,
+                        "metrics": threshold_metrics(records, DEFAULT_LOW, high, confidence_level, genre=genre)}
+        return None
     all_scores = sorted(r["score"] for r in binary)
     high_eligible = sorted(r["score"] for r in eligible)
-    grid = sorted({0.0, 1.0} | {r["score"] for r in binary} |
-                  {math.nextafter(r["score"], 1.0) for r in binary if r["score"] < 1.0})
+    grid = sorted(candidates | {0.0, 1.0})
     lows, highs = [], []
     for threshold in grid:
         fn = bisect_left(ai, threshold)
@@ -259,7 +270,12 @@ def build_profile(records: list[dict], *, max_false_positive_rate: float = 0.20,
             "profile_version": "thresholds-zh-genre-v1" if genre is not None else "thresholds-v1",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "dataset_fingerprint": fingerprint, "score_semantics": "raw_model_score_not_authorship_probability",
-            "evaluation_unit": "document", "fit_objective": "Minimize calibration binary uncertainty subject to Wilson upper-bound error constraints; mixed and independent test samples never fit thresholds.",
+            "evaluation_unit": "document", "fit_objective": (
+                "Keep the default low boundary and pick the lowest high boundary at or above the default "
+                "that meets calibration Wilson upper-bound error constraints; mixed and independent test samples never fit thresholds."
+                if genre is not None else
+                "Minimize calibration binary uncertainty subject to Wilson upper-bound error constraints; mixed and independent test samples never fit thresholds."
+            ),
             "policy": {"max_false_positive_rate": max_false_positive_rate, "max_false_negative_rate": max_false_negative_rate,
                        "confidence_level": confidence_level, "min_samples_per_class": min_samples_per_class},
             "languages": languages, **({"genre": genre} if genre is not None else {})}

@@ -5,7 +5,6 @@ import json
 import math
 import os
 import re
-from functools import lru_cache
 from pathlib import Path
 
 from calibration import DEFAULT_HIGH, DEFAULT_LOW, ZH_GENRES, wilson_interval
@@ -22,11 +21,13 @@ def _finite_float(value: str) -> float:
     return number
 
 
-@lru_cache(maxsize=4)
-def _read_profile(path: str, mtime_ns: int, size: int) -> dict:
-    if size > 2 * 1024 * 1024:
+def _read_profile(path: Path) -> dict:
+    limit = 2 * 1024 * 1024
+    with path.open("rb") as stream:
+        data = stream.read(limit + 1)
+    if len(data) > limit:
         raise ValueError("Profile too large")
-    profile = json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=_reject_constant, parse_float=_finite_float)
+    profile = json.loads(data.decode("utf-8"), parse_constant=_reject_constant, parse_float=_finite_float)
     if not isinstance(profile, dict) or type(profile.get("schema_version")) is not int:
         raise ValueError("Invalid profile schema")
     schema, genre = profile["schema_version"], profile.get("genre")
@@ -100,9 +101,7 @@ def resolve_calibration(
         return decision
     defaults = decision.copy()
     try:
-        path = Path(configured).resolve()
-        stat = path.stat()
-        profile = _read_profile(str(path), stat.st_mtime_ns, stat.st_size)
+        profile = _read_profile(Path(configured))
         if profile.get("genre") != genre:
             raise ValueError("Calibration genre mismatch")
         item = profile["languages"].get(lang)
@@ -118,6 +117,8 @@ def resolve_calibration(
             and math.isfinite(low) and math.isfinite(high) and 0 <= low < high <= 1
         ):
             raise ValueError("Invalid thresholds")
+        if status == "validated" and genre is not None and (low != DEFAULT_LOW or high < DEFAULT_HIGH):
+            raise ValueError("Genre profiles must preserve the low boundary and cannot lower the high boundary")
         decision.update({
             "status": status,
             "profile_version": profile.get("profile_version"),

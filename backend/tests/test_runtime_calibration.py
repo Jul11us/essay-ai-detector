@@ -1,6 +1,7 @@
 """Only verified, matching document profiles may change document display bands."""
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -18,9 +19,6 @@ def isolate_profile_env(monkeypatch):
     monkeypatch.delenv("DETECTOR_CALIBRATION_PATH", raising=False)
     for genre in ("COMPOSITION", "PAPER"):
         monkeypatch.delenv(f"DETECTOR_ZH_{genre}_CALIBRATION_PATH", raising=False)
-    calibration._read_profile.cache_clear()
-    yield
-    calibration._read_profile.cache_clear()
 
 
 def valid_profile():
@@ -214,6 +212,7 @@ def install_genre(tmp_path, monkeypatch, genre, **updates):
     zh = profile["languages"].pop("en")
     zh["model_id"] = MODEL_IDS["zh"]
     zh["applicability"]["domains"] = [genre]
+    zh.update(low=calibration.DEFAULT_LOW, high=calibration.DEFAULT_HIGH)
     zh.update(updates)
     profile.update(schema_version=2, genre=genre, languages={"zh": zh})
     path = tmp_path / f"{genre}.json"
@@ -231,14 +230,25 @@ def test_genre_thresholds_match_only_their_explicit_request(tmp_path, monkeypatc
 
     assert_defaults(resolved())
     assert resolved("composition")["high"] == 0.85
-    assert resolved("paper")["high"] == 0.60
+    assert resolved("paper")["high"] == calibration.DEFAULT_HIGH
     assert_defaults(resolved("paper", count=2010))
     monkeypatch.setenv("DETECTOR_ZH_COMPOSITION_CALIBRATION_PATH", str(path))
     monkeypatch.setenv("DETECTOR_CALIBRATION_PATH", str(path))
     assert_defaults(resolved("composition"))
     assert_defaults(resolved())
+    original = path.stat()
     install_genre(tmp_path, monkeypatch, "paper", status="candidate")
+    assert path.stat().st_size == original.st_size
+    os.utime(path, ns=(original.st_atime_ns, original.st_mtime_ns))
     assert_defaults(resolved("paper"))
+
+
+@pytest.mark.parametrize("updates", [{"low": 0.5}, {"high": 0.7}])
+def test_profile_cannot_override_genre_boundary_policy(tmp_path, monkeypatch, updates):
+    install_genre(tmp_path, monkeypatch, "paper", **updates)
+    result = calibration.resolve_calibration("zh", MODEL_IDS["zh"], REVISION, 500, genre="paper")
+    assert_defaults(result)
+    assert result["status"] == "unvalidated"
 
 
 def test_paper_coverage_only_changes_document_verdict(tmp_path, monkeypatch):
@@ -248,7 +258,7 @@ def test_paper_coverage_only_changes_document_verdict(tmp_path, monkeypatch):
     install_genre(tmp_path, monkeypatch, "composition")
     monkeypatch.setattr(hub, "loaded", {"zh": True, "en": False})
     monkeypatch.setattr(hub, "revisions", {"zh": REVISION})
-    monkeypatch.setattr(hub, "score", lambda text, lang: 0.65)
+    monkeypatch.setattr(hub, "score", lambda text, lang: 0.85)
     text = "这段中文用于检验单段论文的全文分档规则。" * 24
     with TestClient(app) as client:
         def detect(body, **fields):

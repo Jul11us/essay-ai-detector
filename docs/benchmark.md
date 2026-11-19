@@ -113,6 +113,6 @@ python backend/benchmark.py paper.jsonl --genre paper --out paper-report.json \
   --calibration-out paper-profile.json --max-false-positive-rate 0.10 --max-false-negative-rate 0.10
 ```
 
-对作文另跑一遍 `--genre composition`。配置文件中的 `test_baseline_metrics` 和 `test_metrics` 分别报告默认和候选档位，按人写误报、AI 较高、AI 较低及不确定分开看。作文保留原充分度规则；论文可在至少 400 个已评分非空白字符时将单段标为较高，仍保留低充分度提示。只有经过相同规则评测的论文配置才能启用这个例外。
+对作文另跑一遍 `--genre composition`。两种文体都保留默认较低门槛（0.40），不会把更多 AI 样本判为较低；仅在校准集上拟合不低于 0.75、满足误差约束的最小较高门槛。配置文件中的 `test_baseline_metrics` 和 `test_metrics` 分别报告默认和候选档位，按人写误报、AI 较高、AI 较低及不确定分开看。作文保留原充分度规则；论文可在至少 400 个已评分非空白字符时将单段标为较高，仍保留低充分度提示。只有经过相同规则评测的论文配置才能启用这个例外。
 
 有充分来源证据且配置为 `validated` 时，本地后端可分别设置 `DETECTOR_ZH_COMPOSITION_CALIBRATION_PATH` 和 `DETECTOR_ZH_PAPER_CALIBRATION_PATH`。调用 `POST /api/detect` 时在 JSON 或文件表单中显式传 `lang=zh` 和 `genre=composition` 或 `genre=paper`；不会自动猜文体。段落重测、中英分开和选段上传不支持此字段。文体配置未提供、未验证或不适用于当前模型或长度时，仍使用默认门槛。不传 `genre` 时，现有通用配置行为不变；网页不自动启用这些配置。
