@@ -3,11 +3,11 @@
     "en": {
       "abstain": 52,
       "ai": 50,
-      "ai_uncertain": 2,
-      "false_flags": 1,
+      "ai_uncertain": 7,
+      "false_flags": 0,
       "human": 50,
-      "human_uncertain": 2,
-      "misses": 4,
+      "human_uncertain": 3,
+      "misses": 9,
       "n": 100
     },
     "zh HC3": {
@@ -24,9 +24,9 @@
       "abstain": 0,
       "ai": 40,
       "ai_uncertain": 0,
-      "false_flags": 13,
+      "false_flags": 4,
       "human": 40,
-      "human_uncertain": 16,
+      "human_uncertain": 25,
       "misses": 0,
       "n": 80
     },

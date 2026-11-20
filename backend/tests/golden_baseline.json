@@ -30,7 +30,7 @@
   },
   "zh_doc": {
     "score": 0.8889,
-    "verdict": "high",
+    "verdict": "uncertain",
     "confidence": "medium",
     "mixed_variance": false,
     "char_count": 980,
@@ -46,7 +46,7 @@
       612,
       368
     ],
-    "review_risk": "likely_flag"
+    "review_risk": "unclear"
   },
   "zh_label_probe": {
     "ai_style": 0.9993664622306824,
