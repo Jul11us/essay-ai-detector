@@ -13,7 +13,7 @@ from app.length import SENTENCE_REVIEW_MAX_CHARS, check_length, count_chars
 from app.learner_verdict import guard_verdict
 from app.markers import find_markers
 from app.model_artifacts import MODEL_IDS
-from app.paragraphs import prepare_scoring_text, split_paragraphs
+from app.paragraphs import prepare_scoring_text, split_paragraphs_with_joins
 from app.rhythm import measure_rhythm
 from app.second_opinion import REVIEW_THRESHOLD
 
@@ -58,7 +58,8 @@ def run_detect(
     )
     check_length(scored_text, lang, floor=length_floor)
     check_language(scored_text, lang)
-    parts = split_paragraphs(scored_text, lang, scored_natural)
+    sections = split_paragraphs_with_joins(scored_text, lang, scored_natural)
+    parts = [part for part, _ in sections]
     try:
         probs = [float(score_fn(p, lang)) for p in parts]
     except DetectError:
@@ -115,6 +116,7 @@ def run_detect(
                 "index": p.index,
                 "excerpt": p.excerpt,
                 "text": parts[p.index],
+                "joins_previous": sections[p.index][1],
                 "score": p.score,
                 "verdict": p.verdict,
                 "char_count": p.char_count,

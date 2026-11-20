@@ -209,13 +209,15 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
 
 /** 用单段检测的返回替换原文里的一段，并按各段字数把总分重算一遍。 */
 export function replaceParagraph(doc: DetectOk, index: number, piece: DetectOk): DetectOk {
-  const incoming = piece.paragraphs.map((p) => ({ ...p, sentences: p.sentences ?? null }));
+  const prior = doc.paragraphs.find((p) => p.index === index);
+  const incoming = piece.paragraphs.map((p, i) => ({
+    ...p, joins_previous: i === 0 ? prior?.joins_previous : p.joins_previous, sentences: p.sentences ?? null,
+  }));
   const paragraphs = [
     ...doc.paragraphs.filter((p) => p.index < index),
     ...incoming,
     ...doc.paragraphs.filter((p) => p.index > index),
   ].map((p, i) => ({ ...p, index: i }));
-  const prior = doc.paragraphs.find((p) => p.index === index);
   const edited = incoming.map((p) => p.text || p.excerpt).join("\n\n") !== (prior?.text || prior?.excerpt);
   const current = { ...doc };
   if (edited) {

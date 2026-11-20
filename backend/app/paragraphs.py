@@ -26,11 +26,18 @@ def _clean(parts: list[str]) -> list[str]:
     return [p.strip() for p in parts if p.strip() and len(p.strip()) >= MIN_SEGMENT_CHARS]
 
 
-def _chunk_chars(text: str, limit: int) -> list[str]:
-    return [text[i : i + limit] for i in range(0, len(text), limit)]
+def _chunk_chars(text: str, limit: int) -> list[tuple[str, bool]]:
+    return [
+        (text[i : i + limit], i > 0 and not (text[i - 1].isspace() or text[i].isspace()))
+        for i in range(0, len(text), limit)
+    ]
 
 
-def _pack_sentences(text: str, limit: int) -> list[str]:
+def _clean_with_joins(parts: list[tuple[str, bool]]) -> list[tuple[str, bool]]:
+    return [(part.strip(), joined) for part, joined in parts if len(part.strip()) >= MIN_SEGMENT_CHARS]
+
+
+def _pack_sentences(text: str, limit: int) -> list[tuple[str, bool]]:
     bits = [b.strip() for b in _SENTENCE.split(text) if b.strip()]
     if not bits:
         return _chunk_chars(text, limit)
@@ -45,13 +52,13 @@ def _pack_sentences(text: str, limit: int) -> list[str]:
             buf = trial
     if buf:
         chunks.append(buf)
-    out: list[str] = []
+    out: list[tuple[str, bool]] = []
     for ch in chunks:
         if len(ch) <= limit:
-            out.append(ch)
+            out.append((ch, False))
         else:
             out.extend(_chunk_chars(ch, limit))
-    return _clean(out)
+    return _clean_with_joins(out)
 
 
 def split_paragraphs(
@@ -59,6 +66,14 @@ def split_paragraphs(
     lang: str,
     natural_paragraphs: tuple[str, ...] | None = None,
 ) -> list[str]:
+    return [part for part, _ in split_paragraphs_with_joins(text, lang, natural_paragraphs)]
+
+
+def split_paragraphs_with_joins(
+    text: str,
+    lang: str,
+    natural_paragraphs: tuple[str, ...] | None = None,
+) -> list[tuple[str, bool]]:
     limit = _limit(lang)
     if natural_paragraphs:
         parts = _clean(list(natural_paragraphs))
@@ -70,14 +85,14 @@ def split_paragraphs(
     if len(parts) == 1 and len(parts[0]) > limit:
         parts = _clean(parts[0].split("\n"))
 
-    expanded: list[str] = []
+    expanded: list[tuple[str, bool]] = []
     for p in parts:
         if len(p) > limit:
             packed = _pack_sentences(p, limit)
             expanded.extend(packed if packed else _chunk_chars(p, limit))
         else:
-            expanded.append(p)
-    expanded = _clean(expanded)
+            expanded.append((p, False))
+    expanded = _clean_with_joins(expanded)
     if not expanded:
         raise DetectError("too_short")
     return expanded

@@ -19,7 +19,7 @@ describe("guard-adjusted result header", () => {
         observed: lang === "en" ? .1 : .92, threshold: lang === "en" ? .3 : .925,
         original_verdict: "high", verdict: "uncertain", note: "按保守复核规则降为不确定。" },
     };
-    const props = { copied: false, onCopy: vi.fn(), onSaveVersion: vi.fn(),
+    const props = { processEvidence: { kind: "none" } as const, copied: false, onCopy: vi.fn(), onSaveVersion: vi.fn(),
       onRecheck: vi.fn(), onScan: vi.fn(), recheckingIndex: null, scanProgress: null };
     const { container, rerender } = render(<ResultCard {...props} data={data} />);
     const retested = replaceParagraph(data, 0, { ...data, paragraphs: [data.paragraphs[0]] });

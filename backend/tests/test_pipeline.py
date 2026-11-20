@@ -32,6 +32,25 @@ def test_json_happy_path_weighted():
     assert len(out["rhythm"]["lengths"]) == 2
 
 
+@pytest.mark.parametrize(
+    ("word_start", "right_start", "joins_previous"),
+    [(1196, "rfall", True), (1200, "waterfall", False)],
+)
+def test_hard_split_preserves_word_boundary_for_writing_history(word_start, right_start, joins_previous):
+    prefix = ("we followed the river with our guide " * 30).strip()
+    raw = prefix.ljust(word_start) + "waterfall follows the path with loose stones"
+    scored = []
+
+    def score(text, _lang):
+        scored.append(text)
+        return 0.50
+
+    result = run_detect("en", raw, None, None, score)
+    assert scored == [raw[:1200].strip(), raw[1200:].strip()]
+    assert result["paragraphs"][1]["text"].startswith(right_start)
+    assert [p["joins_previous"] for p in result["paragraphs"]] == [False, joins_previous]
+
+
 def test_missing_lang():
     with pytest.raises(DetectError) as ei:
         run_detect(None, "a" * 400, None, None, fake_score)
