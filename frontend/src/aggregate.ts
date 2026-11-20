@@ -178,6 +178,8 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
     }
   }
   if (adjustment) stats.verdict = "uncertain";
+  const paraphraseReview = doc.paraphrase_review === true && stats.verdict === "low";
+  if (paraphraseReview) stats.verdict = "uncertain";
   let basis = doc.basis;
   if (calibration && basis.includes("当前整篇档位：")) {
     const low = calibration.applied ? calibration.low : 0.4;
@@ -186,8 +188,10 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
       `当前整篇档位：低于 ${(low * 100).toFixed(1)}% 为较低，${(low * 100).toFixed(1)}%–${(high * 100).toFixed(1)}% 为不确定，` +
       `不低于 ${(high * 100).toFixed(1)}% 且${doc.lang === "en" ? `参与评分的文字达到 ${SINGLE_PARAGRAPH_MIN_HIGH_CHARS} 字（单段也可）` : "文本充分度不是「低」"}才标较高。作文适用性仍需真实作文语料验证。`;
   }
-  const outlook = reviewOutlook({ ...stats, paragraphs });
-  const reading = adjustment?.note ?? readingText(stats);
+  const outlook = paraphraseReview
+    ? { risk: doc.review_risk, label: doc.review_label, detail: doc.review }
+    : reviewOutlook({ ...stats, paragraphs });
+  const reading = paraphraseReview ? doc.reading : adjustment?.note ?? readingText(stats);
   return {
     ...doc,
     ...stats,
@@ -211,9 +215,14 @@ export function replaceParagraph(doc: DetectOk, index: number, piece: DetectOk):
     ...incoming,
     ...doc.paragraphs.filter((p) => p.index > index),
   ].map((p, i) => ({ ...p, index: i }));
-  const next = applyStats(doc, paragraphs);
   const prior = doc.paragraphs.find((p) => p.index === index);
   const edited = incoming.map((p) => p.text || p.excerpt).join("\n\n") !== (prior?.text || prior?.excerpt);
+  const current = { ...doc };
+  if (edited) {
+    delete current.paraphrase_review;
+    delete current.second_opinion_score;
+  }
+  const next = applyStats(current, paragraphs);
   if (edited && next.detection_scope && !next.detection_scope.note.includes("正文已在复核中修改")) {
     next.detection_scope = { ...next.detection_scope, note: next.detection_scope.note + " 正文已在复核中修改并重测；以上段落和字符数量记录原文件的选择范围，当前分数对应报告中的修改后正文。" };
   }

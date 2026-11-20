@@ -31,6 +31,94 @@ function doc(paragraphs: DetectOk["paragraphs"]): DetectOk {
 }
 
 describe("replaceParagraph", () => {
+  it.each([0.0001, 0.2])("preserves document paraphrase review after an unchanged paragraph retest (%s)", (score) => {
+    const current = Object.assign(doc([
+      { index: 0, text: "Body.", excerpt: "Body.", score, verdict: "low", char_count: 450 },
+    ]), {
+      paraphrase_review: true,
+      second_opinion_score: 0.9,
+      reading: "英文第二模型提示需人工复核。",
+      review_label: "作业审查：英文第二模型建议复核",
+      review: "这不是 AI 生成证据。",
+    });
+    const next = replaceParagraph(current, 0, doc([current.paragraphs[0]]));
+    expect(next.verdict).toBe("uncertain");
+    expect(next.score).toBe(score);
+    expect(next).toMatchObject({ paraphrase_review: true, second_opinion_score: 0.9 });
+    expect(next.reading).toBe(current.reading);
+    expect(next.review_risk).toBe(current.review_risk);
+    expect(next.review_label).toBe(current.review_label);
+    expect(next.review).toBe(current.review);
+    expect(next.explanation).toContain(current.reading);
+    expect(next.explanation).toContain(current.review_label);
+    expect(next.explanation).toContain(current.review);
+  });
+
+  it.each([
+    [0.2, "low"],
+    [0.5, "uncertain"],
+    [0.9, "high"],
+  ] as const)("clears stale document review when paragraph text changes (%s)", (score, verdict) => {
+    const current = Object.assign(doc([
+      { index: 0, text: "Original body.", excerpt: "Same excerpt", score: 0.2, verdict: "low", char_count: 450 },
+    ]), {
+      paraphrase_review: true,
+      second_opinion_score: 0.9,
+      reading: "Second model note",
+      review_label: "Second model label",
+      review: "Second model warning",
+    });
+    const edited = doc([
+      { index: 0, text: "Edited body.", excerpt: "Same excerpt", score, verdict, char_count: 450,
+        sentences: [{ text: "Edited body.", score, verdict, highlight: null }] },
+    ]);
+    const next = replaceParagraph(current, 0, edited);
+    expect(next.verdict).toBe(verdict);
+    expect(next.score).toBe(score);
+    expect(next).not.toHaveProperty("paraphrase_review");
+    expect(next).not.toHaveProperty("second_opinion_score");
+    expect(next.reading).not.toBe(current.reading);
+    expect(next.review_label).not.toBe(current.review_label);
+    expect(next.review).not.toBe(current.review);
+    expect(next.explanation).not.toContain(current.reading);
+    expect(next.explanation).not.toContain(current.review_label);
+    expect(next.explanation).not.toContain(current.review);
+    expect(current.paraphrase_review).toBe(true);
+    expect(current.second_opinion_score).toBe(0.9);
+    const repeated = replaceParagraph(next, 0, edited);
+    expect(repeated.verdict).toBe(verdict);
+    expect(repeated).not.toHaveProperty("paraphrase_review");
+    expect(repeated).not.toHaveProperty("second_opinion_score");
+  });
+
+  it.each([
+    [undefined, 0.2, "low"],
+    [false, 0.2, "low"],
+    [true, 0.5, "uncertain"],
+    [true, 0.9, "high"],
+  ] as const)("leaves recomputed verdicts unchanged for review=%s, score=%s", (flag, score, verdict) => {
+    const current = Object.assign(doc([
+      { index: 0, text: "Body.", excerpt: "Body.", score, verdict, char_count: 450,
+        sentences: [{ text: "Body.", score, verdict, highlight: null }] },
+    ]), { paraphrase_review: flag, reading: "Second model note", review_label: "Second model label" });
+    const next = replaceParagraph(current, 0, doc([current.paragraphs[0]]));
+    expect(next.verdict).toBe(verdict);
+    expect(next.reading).not.toBe(current.reading);
+    expect(next.review_label).not.toBe(current.review_label);
+  });
+
+  it("keeps main's high-verdict guard instead of reusing the second-model review note", () => {
+    const current = Object.assign(doc([
+      { index: 0, text: "Body.", excerpt: "Body.", score: .9, verdict: "high", char_count: 450,
+        sentences: [{ text: "Body.", score: .1, verdict: "low", highlight: null }] },
+    ]), { paraphrase_review: true, reading: "Second model note" });
+    const next = replaceParagraph(current, 0, doc([current.paragraphs[0]]));
+    expect(next.verdict).toBe("uncertain");
+    expect(next.verdict_adjustment?.code).toBe("en_sentence_median_guard");
+    expect(next.reading).toBe(next.verdict_adjustment?.note);
+    expect(next.reading).not.toBe(current.reading);
+  });
+
   it("distinguishes original file scope from edited and rescored text", () => {
     const current = doc([{ index: 0, text: "Original body.", excerpt: "Original body.", score: .2, verdict: "low", char_count: 400 }]);
     current.detection_scope = { source_name: "paper.txt", source_sha256: "a".repeat(64), total_blocks: 6, selected_blocks: 1, total_chars: 1000, selected_chars: 400, excluded: [], note: "分数仅对应所选文字。" };

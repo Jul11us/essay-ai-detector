@@ -8,6 +8,7 @@ from app.errors import DetectError
 from app.model_artifacts import MODEL_COMMITS, MODEL_IDS, MODEL_SHA256, verify_artifacts
 from app.model_identity import model_revision
 from app.sanity import check_zh_direction
+from app.second_opinion import EnglishSecondOpinion
 from app.scoring import (
     EN_INFER_STRIDE,
     EN_INFER_TOKENS,
@@ -70,6 +71,7 @@ class ModelHub:
         self._runtimes = {"zh": "pytorch", "en": "pytorch"}
         self.revisions: dict[str, str | None] = {}
         self._thread: threading.Thread | None = None
+        self.second_opinion = EnglishSecondOpinion()
 
     def status(self) -> dict:
         return {
@@ -92,6 +94,7 @@ class ModelHub:
             "loading": self._thread is not None and self._thread.is_alive(),
             "runtime": dict(self._runtimes),
             "model_revisions": dict(self.revisions),
+            "en_review": self.second_opinion.status(),
         }
 
     def assert_ready(self, lang: str | None = None) -> None:
@@ -145,6 +148,7 @@ class ModelHub:
         except Exception as exc:
             self._errors["en"] = str(exc)
         self._sync_phase()
+        self.second_opinion.load_in_background()
 
         try:
             self.detail = "正在准备中文模型…"
