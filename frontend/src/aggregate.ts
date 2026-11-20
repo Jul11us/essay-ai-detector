@@ -5,6 +5,7 @@ import type {
   DetectOk,
   ParagraphHit,
   Verdict,
+  VerdictAdjustment,
 } from "./types";
 import { isBilingual, isSectionErr } from "./types";
 import { keepReviews } from "./reviews";
@@ -150,6 +151,33 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
       note: "修改后文本长度超出校准样本范围；当前使用默认展示门槛。段落和句子着色尚未校准。" };
   }
   const stats = reaggregate(paragraphs, calibration?.applied ? calibration : undefined, doc.lang);
+  let adjustment: VerdictAdjustment | null = null;
+  if (stats.verdict === "high") {
+    if (doc.lang === "zh" && calibration?.genre !== "paper" && !calibration?.applied &&
+      stats.confidence === "medium" && stats.score < 0.925) {
+      adjustment = {
+        code: "zh_medium_high_guard", observed: stats.score, threshold: 0.925,
+        original_verdict: "high", verdict: "uncertain",
+        note: "中文默认非论文检测：中等充分度的全文分数未达 92.5%，保守降为不确定；原始分数和段落档位不变。",
+      };
+    } else if (doc.lang === "en") {
+      const scores = paragraphs.flatMap((p) => (p.sentences ?? []).flatMap((s) => s.score === null ? [] : [s.score])).sort((a, b) => a - b);
+      const pending = paragraphs.some((p) => !p.sentences?.length);
+      const middle = Math.floor(scores.length / 2);
+      const median = pending || !scores.length ? null : scores.length % 2 ? scores[middle] : (scores[middle - 1] + scores[middle]) / 2;
+      if (median === null || median < 0.30) {
+        adjustment = {
+          code: "en_sentence_median_guard", observed: median, threshold: 0.30,
+          original_verdict: "high", verdict: "uncertain", scored_sentences: scores.length,
+          pending_sentences: pending,
+          note: pending
+            ? "修改后的全文逐句复核尚未完整，暂保守标为不确定；请重新检测整篇确认。原始分数和段落档位不变。"
+            : "英文逐句复核的分数中位数未达 30%（或没有可评分句子），全文保守降为不确定；原始分数和段落档位不变。",
+        };
+      }
+    }
+  }
+  if (adjustment) stats.verdict = "uncertain";
   const paraphraseReview = doc.paraphrase_review === true && stats.verdict === "low";
   if (paraphraseReview) stats.verdict = "uncertain";
   let basis = doc.basis;
@@ -163,24 +191,25 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
   const outlook = paraphraseReview
     ? { risk: doc.review_risk, label: doc.review_label, detail: doc.review }
     : reviewOutlook({ ...stats, paragraphs });
-  const reading = paraphraseReview ? doc.reading : readingText(stats);
+  const reading = paraphraseReview ? doc.reading : adjustment?.note ?? readingText(stats);
   return {
     ...doc,
     ...stats,
     calibration,
+    verdict_adjustment: adjustment,
     basis,
     paragraphs,
     reading,
     review_risk: outlook.risk,
     review_label: outlook.label,
     review: outlook.detail,
-    explanation: [basis, reading, outlook.label, outlook.detail].filter(Boolean).join("\n"),
+    explanation: [basis, reading, ...(adjustment ? [] : [outlook.label, outlook.detail])].filter(Boolean).join("\n"),
   };
 }
 
 /** 用单段检测的返回替换原文里的一段，并按各段字数把总分重算一遍。 */
 export function replaceParagraph(doc: DetectOk, index: number, piece: DetectOk): DetectOk {
-  const incoming = piece.paragraphs.map((p) => ({ ...p, sentences: null }));
+  const incoming = piece.paragraphs.map((p) => ({ ...p, sentences: p.sentences ?? null }));
   const paragraphs = [
     ...doc.paragraphs.filter((p) => p.index < index),
     ...incoming,

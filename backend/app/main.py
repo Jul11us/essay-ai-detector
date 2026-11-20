@@ -152,6 +152,7 @@ def _detect_document(cancel, lang, text, filename, file_bytes, floor, selection=
         extracted_override=extracted,
         second_score_fn=cancellable(hub.second_opinion.score, cancel)
         if hub.second_opinion.enabled and lang == "en" and floor is None else None,
+        score_many=cancellable(hub.score_many, cancel),
     )
     if coverage is not None:
         result["detection_scope"] = coverage

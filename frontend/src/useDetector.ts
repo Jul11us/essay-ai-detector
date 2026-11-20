@@ -281,7 +281,7 @@ export function useDetector() {
         return cur;
       });
       // 改过的这一段自动重新逐句打分，不用再点「定位」。
-      const fresh = data.paragraphs.map((_, k) => index + k);
+      const fresh = data.paragraphs.flatMap((p, k) => p.sentences == null ? [index + k] : []);
       void (async () => {
         for (const i of fresh) await onScan(side, merged, i);
       })();

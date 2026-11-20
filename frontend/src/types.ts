@@ -2,6 +2,16 @@ export type Lang = "zh" | "en" | "bi";
 export type ScoreLang = "zh" | "en";
 export type Verdict = "low" | "uncertain" | "high";
 export type Confidence = "low" | "medium" | "high";
+export type VerdictAdjustment = {
+  code: "zh_medium_high_guard" | "en_sentence_median_guard";
+  observed: number | null;
+  threshold: number;
+  original_verdict: "high";
+  verdict: "uncertain";
+  note: string;
+  scored_sentences?: number;
+  pending_sentences?: boolean;
+};
 export type SentenceReview = { state: "reviewed" | "pending" | "revise"; note: string; updated_at: string };
 export type DetectionScope = { source_name: string; source_sha256: string; total_blocks: number; selected_blocks: number; total_chars: number; selected_chars: number; excluded: { text: string; reason: string }[]; note: string };
 
@@ -54,6 +64,7 @@ export type DetectOk = {
   model_id: string;
   model_revision?: string | null;
   calibration?: CalibrationInfo;
+  verdict_adjustment?: VerdictAdjustment | null;
   lang: ScoreLang;
   explanation: string;
   basis: string;
@@ -69,6 +80,7 @@ export type DetectOk = {
 };
 
 export type CalibrationInfo = {
+  genre?: string | null;
   status: "default" | "candidate" | "unvalidated" | "validated";
   applied: boolean;
   low: number;

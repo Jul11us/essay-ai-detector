@@ -50,6 +50,18 @@ def test_non_low_chinese_and_paragraph_results_are_untouched(score, lang, scope)
     assert detect(forbidden, score, lang, calibration_scope=scope) == detect(None, score, lang, calibration_scope=scope)
 
 
+def test_main_high_guard_runs_before_optional_low_review():
+    def forbidden(_):
+        pytest.fail("second model must not run for a guarded uncertain verdict")
+    score_many = lambda texts, _: [.1] * len(texts)
+    baseline = detect(score=.9, score_many=score_many)
+    result = detect(forbidden, score=.9, score_many=score_many)
+    assert result == baseline
+    assert result["verdict"] == "uncertain"
+    assert result["verdict_adjustment"]["code"] == "en_sentence_median_guard"
+    assert "second_opinion_score" not in result
+
+
 @pytest.mark.parametrize("value", [None, float("nan"), float("inf"), -.1, 1.1])
 def test_unavailable_or_invalid_second_score_is_byte_identical(value):
     assert json.dumps(detect(lambda _: value)) == json.dumps(detect())

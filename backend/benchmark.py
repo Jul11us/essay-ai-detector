@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -25,6 +26,32 @@ PARAPHRASE_METHODS = {
     for method in ("back_translation", "dipper", "polish")
     for name in (method, f"paraphrase_{method}", f"paraphrase_{method}_llm")
 }
+PROVENANCE_FIELDS = ("author_names_sha256", "first_version_at", "published_at", "authorship_evidence",
+                     "ai_use_declaration", "consent_reference")
+
+
+def validate_provenance(row: dict) -> None:
+    if "author_names_sha256" in row and (not isinstance(row["author_names_sha256"], str) or
+                                         not re.fullmatch(r"[0-9a-f]{64}", row["author_names_sha256"])):
+        raise ValueError("Invalid author_names_sha256")
+    for key in ("first_version_at", "published_at"):
+        if key in row:
+            value = row[key]
+            if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?", value):
+                raise ValueError(f"Invalid ISO date: {key}")
+            try:
+                datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                raise ValueError(f"Invalid ISO date: {key}") from None
+    for key, choices in (("authorship_evidence", {"publication_claim", "consented_attestation"}),
+                         ("ai_use_declaration", {"none_found", "declared_no_ai", "declared_ai_use"})):
+        if key in row and (not isinstance(row[key], str) or row[key] not in choices):
+            raise ValueError(f"Invalid {key}")
+    consent = row.get("consent_reference")
+    if consent is not None and (not isinstance(consent, str) or not consent.strip()):
+        raise ValueError("Invalid consent_reference")
+    if row.get("authorship_evidence") == "consented_attestation" and not consent:
+        raise ValueError("consented_attestation requires consent_reference")
 
 
 def load_manifest(path: Path) -> list[dict]:
@@ -35,6 +62,7 @@ def load_manifest(path: Path) -> list[dict]:
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("Manifest rows must be objects")
+        validate_provenance(row)
         if not all(isinstance(row.get(k), str) and row[k].strip() for k in ("id", "file", "lang", "label", "source")):
             raise ValueError("Each row needs nonempty id, file, lang, label and source")
         if row["id"] in seen:
@@ -126,6 +154,7 @@ def make_records(rows: list[dict], predictions: list[dict]) -> list[dict]:
     validate_split_groups(rows)
     records = []
     for row in rows:
+        validate_provenance(row)
         p = by_id[row["id"]]
         score = p.get("score")
         if p.get("verdict") not in VERDICTS or type(score) not in (int, float) or not math.isfinite(score):
@@ -157,6 +186,9 @@ def make_records(rows: list[dict], predictions: list[dict]) -> list[dict]:
         # Allowlist: never copy file/_path, raw text, API explanations or excerpts.
         for key in ("source_url", "license", "domain", "dataset_revision", "generated_model", "mixed_method", "components", "training_overlap", "training_overlap_evidence",
                     "generation_method", "source_key", "attack_type", "attack_method", "data_type", "llm_type", "grade", "prompt_name", "prompt_id"):
+            if key in row:
+                record[key] = row[key]
+        for key in PROVENANCE_FIELDS:
             if key in row:
                 record[key] = row[key]
         if "generation_method" in record and (not isinstance(record["generation_method"], str) or not record["generation_method"].strip()):

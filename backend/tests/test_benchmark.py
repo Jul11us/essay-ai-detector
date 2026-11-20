@@ -107,6 +107,38 @@ def test_report_uses_allowlist_without_essay_text_or_input_paths():
     assert "SECRET TEXT" not in serialized and "private/input" not in serialized and "private-file" not in serialized
 
 
+def test_manifest_provenance_survives_safe_report_export(tmp_path):
+    (tmp_path / "h.txt").write_text("human writing", encoding="utf-8")
+    provenance = {"author_names_sha256": "a" * 64, "first_version_at": "2026-08-01T12:30:00Z",
+                  "published_at": "2026-09-01", "authorship_evidence": "publication_claim",
+                  "ai_use_declaration": "none_found", "consent_reference": None}
+    rows = load_manifest(_manifest(tmp_path, [{**_row("h", "h.txt"), **provenance}]))
+    record = make_records(rows, [{"id": "h", "score": .1, "verdict": "low"}])[0]
+    assert {key: record[key] for key in provenance} == provenance
+    assert "file" not in record and "_path" not in record
+
+
+@pytest.mark.parametrize("patch", [
+    {"author_names_sha256": "names"}, {"author_names_sha256": None},
+    {"first_version_at": "2026-02-30"}, {"published_at": "2026-09-01T12:00:00"},
+    {"published_at": "yesterday"}, {"published_at": None},
+    {"authorship_evidence": "verified"}, {"authorship_evidence": []},
+    {"ai_use_declaration": "no_ai_proven"}, {"consent_reference": " "},
+    {"authorship_evidence": "consented_attestation"},
+    {"authorship_evidence": "consented_attestation", "consent_reference": None},
+])
+def test_manifest_rejects_invalid_submission_provenance(tmp_path, patch):
+    (tmp_path / "h.txt").write_text("human writing", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_manifest(_manifest(tmp_path, [{**_row("h", "h.txt"), **patch}]))
+
+
+def test_consented_attestation_requires_reference_not_public_identity():
+    row = {**_row("h", "h.txt"), "authorship_evidence": "consented_attestation", "consent_reference": "registry:private-001"}
+    record = make_records([row], [{"id": "h", "score": .1, "verdict": "low"}])[0]
+    assert record["consent_reference"] == "registry:private-001"
+
+
 def test_generation_provenance_and_breakdown_keep_binary_misses_separate():
     rows = [
         {"id": str(i), "lang": "en", "label": label, "source": "test", "generation_method": method}

@@ -10,6 +10,7 @@ from app.explain import basis, reading, review_outlook
 from app.extract import ExtractedText, extract_from_bytes
 from app.language import check_language
 from app.length import SENTENCE_REVIEW_MAX_CHARS, check_length, count_chars
+from app.learner_verdict import guard_verdict
 from app.markers import find_markers
 from app.model_artifacts import MODEL_IDS
 from app.paragraphs import prepare_scoring_text, split_paragraphs
@@ -17,6 +18,7 @@ from app.rhythm import measure_rhythm
 from app.second_opinion import REVIEW_THRESHOLD
 
 ScoreFn = Callable[[str, str], float]
+ScoreManyFn = Callable[[list[str], str], list[float]]
 
 
 def require_lang(lang: object) -> str:
@@ -39,6 +41,7 @@ def run_detect(
     genre: str | None = None,
     extracted_override: ExtractedText | None = None,
     second_score_fn: Callable[[str], float | None] | None = None,
+    score_many: ScoreManyFn | None = None,
 ) -> dict:
     lang = require_lang(lang)
     if extracted_override is not None:
@@ -71,10 +74,20 @@ def run_detect(
         parts, probs, lang, low=calibration["low"], high=calibration["high"],
         genre=applied_genre,
     )
+    reviews = None
+
+    def sentence_reviews() -> list[dict]:
+        nonlocal reviews
+        if reviews is None:
+            reviews = [run_sentences(lang, p, score_fn, score_many=score_many) for p in parts]
+        return reviews
+
+    agg, adjustment = guard_verdict(agg, lang, calibration, genre, sentence_reviews)
     outlook = review_outlook(agg)
     threshold_basis = basis(
         model_id, lang, low_score=calibration["low"], high_score=calibration["high"], genre=applied_genre,
     )
+    interpretation = reading(agg, adjustment)
     result = {
         "score": agg.score,
         "verdict": agg.verdict,
@@ -86,9 +99,10 @@ def run_detect(
         "model_revision": model_revision,
         "calibration": calibration,
         "lang": lang,
-        "explanation": "\n".join([threshold_basis, reading(agg), calibration["note"]]),
+        "explanation": "\n".join([threshold_basis, interpretation, calibration["note"]]),
         "basis": threshold_basis,
-        "reading": reading(agg),
+        "reading": interpretation,
+        "verdict_adjustment": adjustment,
         "review_risk": outlook.risk,
         "review_label": outlook.label,
         "review": outlook.detail,
@@ -104,6 +118,7 @@ def run_detect(
                 "score": p.score,
                 "verdict": p.verdict,
                 "char_count": p.char_count,
+                **({"sentences": reviews[p.index]["sentences"], "sentenceNote": reviews[p.index]["note"]} if reviews is not None else {}),
             }
             for p in agg.paragraphs
         ],
@@ -130,8 +145,6 @@ def run_detect(
             )
     return result
 
-
-ScoreManyFn = Callable[[list[str], str], list[float]]
 
 # 单句分数 = min(单独一句, 连同前后各一句)。
 # 单独一句太短，模型方差大，人写的短句偶尔会被打到 0.9 以上；
