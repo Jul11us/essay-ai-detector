@@ -115,8 +115,8 @@ test("versions retain text changes, scores and reviews across refresh and restor
 });
 
 test("results use recorded edits for review without changing the score or verdict", async ({page}) => {
-  const first = "Our class set up a swap table for books in the school library. We asked students to bring books they had finished and to leave a short note about each book. Furthermore, the librarian helped us keep the shelves tidy when the table became crowded.";
-  const second = "At the end of the week, we counted the books that were left and asked everyone how they had found something to read. Some students picked a book because of a friend's note. Furthermore, we put the remaining books on a small shelf beside the library entrance.";
+  const first = "Our class set up a swap table for books in the school library and asked students to bring books they had finished and to leave a short note about each book, giving examples of what a new reader might enjoy without revealing the ending; furthermore, the librarian helped us keep the shelves tidy when the table became crowded, showed us how to record the titles on a sheet beside the door, and put a few spare bookmarks on the table so visitors could take one even if they did not find a book.";
+  const second = "At the end of the week, we counted the books that were left and asked everyone how they had found something to read; furthermore, we moved the remaining books to a small shelf beside the library entrance so that other classes could browse them.";
   await page.setViewportSize({width:1440,height:1000}); await ready(page);
   await page.getByRole("button",{name:"英文",exact:true}).click();
   await page.locator('.input-panel input[type="file"]').setInputFiles(file("Class book swap.txt", first + "\n\n" + second));

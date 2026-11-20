@@ -138,7 +138,9 @@ export function ResultCard({
         <div>
           <p className="result-kicker">检测结果 · {data.lang === "zh" ? "中文" : "英文"}</p>
           <h2>{headline}</h2>
-          <p className="result-lead">{data.confidence === "low"
+          <p className="result-lead">{data.verdict === "uncertain" && data.verdict_adjustment
+            ? data.verdict_adjustment.note
+            : data.confidence === "low"
             ? data.verdict === "high"
               ? "只有一个段落，文本充分度仍低；全文已达较高档，请对照原句和上下文人工复核。"
               : data.verdict === "low"

@@ -1,3 +1,4 @@
+import argparse
 import os
 from pathlib import Path
 import sys
@@ -7,13 +8,19 @@ from urllib.request import urlopen
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.model_artifacts import MODEL_COMMITS, MODEL_IDS, MODEL_SHA256, matches_sha256
+from app.model_artifacts import (
+    EN_REVIEW_MODEL_COMMIT, EN_REVIEW_MODEL_ID, EN_REVIEW_MODEL_SHA256,
+    MODEL_COMMITS, MODEL_IDS, MODEL_SHA256, matches_sha256,
+)
 
 
 def download_vanguard(target: Path) -> None:
-    repo, revision = MODEL_IDS["en"], MODEL_COMMITS["en"]
+    download_model(target, MODEL_IDS["en"], MODEL_COMMITS["en"], MODEL_SHA256["en"])
+
+
+def download_model(target: Path, repo: str, revision: str, hashes: dict[str, str]) -> None:
     target.mkdir(parents=True, exist_ok=True)
-    for name, expected in MODEL_SHA256["en"].items():
+    for name, expected in hashes.items():
         output = target / name
         if matches_sha256(output, expected):
             continue
@@ -34,5 +41,12 @@ def download_vanguard(target: Path) -> None:
 
 
 if __name__ == "__main__":
-    download_vanguard(Path(os.environ.get("VANGUARD_MODEL_PATH") or ROOT / "experiments/models/vanguard"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--en-review", action="store_true", help="Download the optional MIT English review model instead of Vanguard")
+    args = parser.parse_args()
+    if args.en_review:
+        download_model(Path(os.environ.get("EN_REVIEW_MODEL_PATH") or ROOT / "experiments/models/openai-detector"),
+                       EN_REVIEW_MODEL_ID, EN_REVIEW_MODEL_COMMIT, EN_REVIEW_MODEL_SHA256)
+    else:
+        download_vanguard(Path(os.environ.get("VANGUARD_MODEL_PATH") or ROOT / "experiments/models/vanguard"))
     print("Download complete", flush=True)

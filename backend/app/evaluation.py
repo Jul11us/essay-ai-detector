@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from benchmark import summarize
+from benchmark import summarize, validate_provenance
 from calibration import build_profile, validate_split_groups
 
 Short = Annotated[str, Field(min_length=1, max_length=500, strict=True)]
@@ -33,11 +33,26 @@ class Sample(BaseModel):
     dataset_revision: Short | None = None
     generated_model: Short | None = None
     mixed_method: Short | None = None
+    generation_method: Short | None = None
+    source_key: Short | None = None
+    attack_type: Short | None = None
+    attack_method: Short | None = None
+    data_type: Short | None = None
+    llm_type: Short | None = None
+    grade: Short | Annotated[int, Field(strict=True)] | None = None
+    prompt_name: Short | None = None
+    prompt_id: Short | Annotated[int, Field(strict=True)] | None = None
     training_overlap: Literal["unknown", "possible", "excluded"] = "unknown"
     training_overlap_evidence: Annotated[str, Field(max_length=4000)] | None = None
     text_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")] | None = None
+    author_names_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")] | None = None
+    first_version_at: Short | None = None
+    published_at: Short | None = None
+    authorship_evidence: Literal["publication_claim", "consented_attestation"] | None = None
+    ai_use_declaration: Literal["none_found", "declared_no_ai", "declared_ai_use"] | None = None
+    consent_reference: Short | None = None
 
-    @field_validator("id", "source", "group_id", "writer_group", "license", "domain")
+    @field_validator("id", "source", "group_id", "writer_group", "license", "domain", "generation_method")
     @classmethod
     def nonblank(cls, value):
         if value is not None and not value.strip():
@@ -66,6 +81,7 @@ class Sample(BaseModel):
 
     @model_validator(mode="after")
     def group_default(self):
+        validate_provenance(self.model_dump(exclude_none=True))
         if self.group_id is None:
             self.group_id = self.id
         return self
@@ -90,6 +106,9 @@ class ManifestRequest(BaseModel):
 
 def validate_samples(samples: list[Sample]) -> list[dict]:
     records = [s.model_dump(exclude_none=True) for s in samples]
+    for sample, record in zip(samples, records):
+        if "consent_reference" in sample.model_fields_set:
+            record["consent_reference"] = sample.consent_reference
     if len({r["id"] for r in records}) != len(records):
         raise ValueError("样本编号重复，请给每份样本唯一编号。")
     validate_split_groups(records)

@@ -39,7 +39,9 @@ def basis(model_id: str, lang: str, *, low_score: float = LOW_SCORE, high_score:
     )
 
 
-def reading(result: AggregateResult) -> str:
+def reading(result: AggregateResult, adjustment: dict | None = None) -> str:
+    if result.verdict == "uncertain" and adjustment is not None:
+        return adjustment["note"]
     if result.score < NEAR_ZERO:
         return (
             "接近 0% 只说明：在本模型看来，这篇更像它训练时见过的人类写法，原始分数小到四舍五入会显示成 0% 或 <0.1%。"

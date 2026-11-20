@@ -152,3 +152,38 @@ python backend/benchmark.py paper.jsonl --genre paper --out paper-report.json \
 对作文另跑一遍 `--genre composition`。两种文体都保留默认较低门槛（0.40），不会把更多 AI 样本判为较低；仅在校准集上拟合不低于 0.75、满足误差约束的最小较高门槛。配置文件中的 `test_baseline_metrics` 和 `test_metrics` 分别报告默认和候选档位，按人写误报、AI 较高、AI 较低及不确定分开看。作文保留原充分度规则；论文可在至少 400 个已评分非空白字符时将单段标为较高，仍保留低充分度提示。英文不分文体，同样可在至少 400 个已评分非空白字符时将单段标为较高（见 [英文评测](benchmark-english.md#single-paragraph-english-text)）。只有经过相同规则评测的论文配置才能启用这个例外。
 
 有充分来源证据且配置为 `validated` 时，本地后端可分别设置 `DETECTOR_ZH_COMPOSITION_CALIBRATION_PATH` 和 `DETECTOR_ZH_PAPER_CALIBRATION_PATH`。调用 `POST /api/detect` 时在 JSON 或文件表单中显式传 `lang=zh` 和 `genre=composition` 或 `genre=paper`；不会自动猜文体。段落重测、中英分开和选段上传不支持此字段。文体配置未提供、未验证或不适用于当前模型或长度时，仍使用默认门槛。不传 `genre` 时，现有通用配置行为不变；网页不自动启用这些配置。
+
+## 学生作文误报保护（仅调整全文档位）
+
+`app/learner_verdict.py` 在原有全文聚合之后执行单向保护：只有原本为 `high` 的结果可能降为 `uncertain`，不新增 `high` 或 `low`，不改原始全文分数、充分度、段落分数／档位或逐句着色。
+
+- **中文 T**：`lang=zh`、`genre != paper`、未应用任何校准配置且门槛为默认 0.40/0.75 时，中等充分度的全文须达到 **0.925** 才保留较高档。达到边界、高充分度、低／不确定档及论文都不受此保护影响；不自动推断文体。
+- **英文**：原本较高的全文还须满足 UI 逐句复核分数中位数 **≥0.30**，否则降为不确定，详见[英文评测](benchmark-english.md#studentlearner-false-flag-guards)。这不把句子分数重新加权为全文分数。
+- 降档响应的 `verdict_adjustment` 包含 `code`（`zh_medium_high_guard` 或 `en_sentence_median_guard`）、`observed`、`threshold`、原／新档位及 `note`；未降档时为 `null`。说明同步放入 `reading`／`explanation`。网页单段重测后的本地重聚合也执行保护；英文逐句结果不完整时保守保留不确定，提示重新检测整篇。
+
+### 新的 C-ReD 开发／测试集
+
+```sh
+python scripts/prepare_chinese_composition_benchmark.py --pairs-per-split 240 --seed 20261120
+```
+
+固定 [C-ReD 修订 b90072cd218b6ebdbd1d1478ce6e439677f18192](https://github.com/HeraldofLight/C-ReD/tree/b90072cd218b6ebdbd1d1478ce6e439677f18192)，校验四个源 CSV 的 SHA-256；每个题目仅选一对 human/AI，按归一化题目分组，归一化正文哈希去重。开发和测试各 **240 对**，每个 split 各含 DeepSeek-V3／GPT-4o／Qwen-3 **80 篇** AI。选样只用固定种子、长度与语言，不读模型分数。输出位于被 git 忽略的 `experiments/benchmark-private/cred-composition/`，`preparation.json` 记录源文件哈希、版本及许可限制。`dev` 是规则开发集，不是 `benchmark.py` 的 `calibration` 配置。
+
+这是新的可重建选样，**不是** PR #4 无构建器的 120 对测试集。C-ReD 论文称其来源为网上收集的高考高分范文，**未核验每篇真实学生作者**；固定修订未找到许可文件，仅用于本地研究，不分发原文。题目隔离不能证明与检测模型训练集独立，训练重叠仍为 `unknown`。
+
+### 全文 API 路径结果
+
+相同真实模型、默认门槛、所有校准关闭；基线为本分支起点 `52cb440` 的默认行为，不是旧研究的英文单段规则。下表按人写较高和 AI 较高／不确定／较低计数：
+
+| 中文集 | 人写 n | 人写较高：原→T | AI n | AI 较高：原→T | AI 不确定：原→T | AI 较低 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| C-ReD 开发 | 240 | 46→18 | 240 | 222→218 | 18→22 | 0 |
+| C-ReD 测试 | 240 | 33→10 | 240 | 206→203 | 34→37 | 0 |
+| HC3 校准 | 25 | 0→0 | 25 | 0→0 | 25→25 | 0 |
+| HC3 测试 | 25 | 0→0 | 25 | 0→0 | 25→25 | 0 |
+
+测试集减少 **23/33** 个既有误报，损失 **3/206（1.46%）** 个既有 AI 较高判定，全部转为不确定。开发集损失 4/222 个 AI 较高。不能据此宣称所有学生作文都受益。
+
+中英文合计 2,480 份学生研究输入经实际 `/api/detect` 复核，逐文检查与离线冻结的中文 T／英文中位数 .30 一致，并检查全文分数及段落档位不变；各语料、各 split 对当前主分支基线新增人写较高均为 **0**。私有结果位于 `experiments/benchmark-private/student-rules/implemented-documents.jsonl`、`implemented-results.json`；不提交原文。HC3 固定 CI 集及额外中文作文／论文门禁集另有前后报告和重录基线；英文相对旧门禁的 AI 较高损失必须同时披露，不能把重录后的通过当作没有取舍，见英文文档。
+
+本规则是开发集比较后的保守判定保护，不是概率校准；完整研究仍有既往看过部分英文／HC3 测试结果、题材和作者群体覆盖有限、训练重叠未知等限制。未更改中文论文阈值或其校准启用条件。

@@ -29,6 +29,22 @@ macOS / Linux 可用 `scripts/dev.sh` 一键启动前后端（Ctrl-C 停止）�
 
 评分复现应使用相同的模型版本、锁定的推理依赖和运行方式。可选的 ONNX、GPU 和不同硬件不保证逐位相同。`/api/status` 会报告实际运行方式及评分版本。中文输入恢复 BERT 首尾标记后，旧中文校准配置不再适用，需重跑评测。英文评分方式不变。
 
+### 可选英文第二模型复核（默认关闭）
+
+先下载约 501 MB 的 MIT 模型，再设置开关并**重启后端**。不会自动下载，也不加入 CI 默认模型下载：
+
+```powershell
+.\.venv-detector\Scripts\python.exe experiments\download_model.py --en-review
+$env:DETECTOR_EN_REVIEW = "1"
+.\打开.bat
+```
+
+macOS / Linux 用 `.venv-detector/bin/python experiments/download_model.py --en-review` 下载，然后 `DETECTOR_EN_REVIEW=1 scripts/dev.sh` 启动。默认路径为 `experiments/models/openai-detector`，下载和加载均可用 `EN_REVIEW_MODEL_PATH` 指定同一离线目录。固定模型为 [openai-community/roberta-base-openai-detector](https://huggingface.co/openai-community/roberta-base-openai-detector/tree/6cba99c003b711c7fe94f8a3aa2be35a792cb6fa)，提交与 SHA256 在 `backend/app/model_artifacts.py`，加载只读本地文件。模型卡声明 MIT，完整上游 [MIT 许可证](https://github.com/openai/gpt-2-output-dataset/blob/b76f67c651fea691b37abe01a6de762bc43330e7/LICENSE) 需随再分发保留。
+
+`/api/status` 的 `en_review.state` 为 `disabled`、`loading`、`ready` 或 `unavailable`；第二模型独立加载，不影响中英文就绪状态。缺文件、校验失败或加载/推理失败时退回原 Vanguard 输出，不新增响应字段。取消开关（PowerShell：`Remove-Item Env:DETECTOR_EN_REVIEW`；Linux/macOS：取消设置或设为 `0`）后重启即恢复默认。
+
+此功能仅用于 `lang=en` 的整篇检测，不用于中英分开模式、段落重测或逐句接口。只在最终 Vanguard 档位为 `low` 时读取参与评分正文的前 512 token；第二模型的 `Fake` 类（下标 0）概率 ≥`0.2915322184562683` 才把整篇升为 `uncertain`，永不生成 `high`，不修改 Vanguard 分数、充分度或段落分数。成功复核时响应含 `second_opinion_score` 和布尔标记 `paraphrase_review`；非低档或未运行复核时不含这些字段。分数不是 AI 字数比例。安全代价与启用前限制见[评测记录](paraphrase-evaluation.md#商业许可候选与可选复核)。
+
 ## 测试
 
 ```powershell

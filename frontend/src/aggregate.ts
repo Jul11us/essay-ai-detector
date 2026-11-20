@@ -5,6 +5,7 @@ import type {
   DetectOk,
   ParagraphHit,
   Verdict,
+  VerdictAdjustment,
 } from "./types";
 import { isBilingual, isSectionErr } from "./types";
 import { keepReviews } from "./reviews";
@@ -150,6 +151,35 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
       note: "修改后文本长度超出校准样本范围；当前使用默认展示门槛。段落和句子着色尚未校准。" };
   }
   const stats = reaggregate(paragraphs, calibration?.applied ? calibration : undefined, doc.lang);
+  let adjustment: VerdictAdjustment | null = null;
+  if (stats.verdict === "high") {
+    if (doc.lang === "zh" && calibration?.genre !== "paper" && !calibration?.applied &&
+      stats.confidence === "medium" && stats.score < 0.925) {
+      adjustment = {
+        code: "zh_medium_high_guard", observed: stats.score, threshold: 0.925,
+        original_verdict: "high", verdict: "uncertain",
+        note: "中文默认非论文检测：中等充分度的全文分数未达 92.5%，保守降为不确定；原始分数和段落档位不变。",
+      };
+    } else if (doc.lang === "en") {
+      const scores = paragraphs.flatMap((p) => (p.sentences ?? []).flatMap((s) => s.score === null ? [] : [s.score])).sort((a, b) => a - b);
+      const pending = paragraphs.some((p) => !p.sentences?.length);
+      const middle = Math.floor(scores.length / 2);
+      const median = pending || !scores.length ? null : scores.length % 2 ? scores[middle] : (scores[middle - 1] + scores[middle]) / 2;
+      if (median === null || median < 0.30) {
+        adjustment = {
+          code: "en_sentence_median_guard", observed: median, threshold: 0.30,
+          original_verdict: "high", verdict: "uncertain", scored_sentences: scores.length,
+          pending_sentences: pending,
+          note: pending
+            ? "修改后的全文逐句复核尚未完整，暂保守标为不确定；请重新检测整篇确认。原始分数和段落档位不变。"
+            : "英文逐句复核的分数中位数未达 30%（或没有可评分句子），全文保守降为不确定；原始分数和段落档位不变。",
+        };
+      }
+    }
+  }
+  if (adjustment) stats.verdict = "uncertain";
+  const paraphraseReview = doc.paraphrase_review === true && stats.verdict === "low";
+  if (paraphraseReview) stats.verdict = "uncertain";
   let basis = doc.basis;
   if (calibration && basis.includes("当前整篇档位：")) {
     const low = calibration.applied ? calibration.low : 0.4;
@@ -158,19 +188,22 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
       `当前整篇档位：低于 ${(low * 100).toFixed(1)}% 为较低，${(low * 100).toFixed(1)}%–${(high * 100).toFixed(1)}% 为不确定，` +
       `不低于 ${(high * 100).toFixed(1)}% 且${doc.lang === "en" ? `参与评分的文字达到 ${SINGLE_PARAGRAPH_MIN_HIGH_CHARS} 字（单段也可）` : "文本充分度不是「低」"}才标较高。作文适用性仍需真实作文语料验证。`;
   }
-  const outlook = reviewOutlook({ ...stats, paragraphs });
-  const reading = readingText(stats);
+  const outlook = paraphraseReview
+    ? { risk: doc.review_risk, label: doc.review_label, detail: doc.review }
+    : reviewOutlook({ ...stats, paragraphs });
+  const reading = paraphraseReview ? doc.reading : adjustment?.note ?? readingText(stats);
   return {
     ...doc,
     ...stats,
     calibration,
+    verdict_adjustment: adjustment,
     basis,
     paragraphs,
     reading,
     review_risk: outlook.risk,
     review_label: outlook.label,
     review: outlook.detail,
-    explanation: [basis, reading, outlook.label, outlook.detail].filter(Boolean).join("\n"),
+    explanation: [basis, reading, ...(adjustment ? [] : [outlook.label, outlook.detail])].filter(Boolean).join("\n"),
   };
 }
 
@@ -178,15 +211,20 @@ function applyStats(doc: DetectOk, paragraphs: ParagraphHit[]): DetectOk {
 export function replaceParagraph(doc: DetectOk, index: number, piece: DetectOk): DetectOk {
   const prior = doc.paragraphs.find((p) => p.index === index);
   const incoming = piece.paragraphs.map((p, i) => ({
-    ...p, joins_previous: i === 0 ? prior?.joins_previous : p.joins_previous, sentences: null,
+    ...p, joins_previous: i === 0 ? prior?.joins_previous : p.joins_previous, sentences: p.sentences ?? null,
   }));
   const paragraphs = [
     ...doc.paragraphs.filter((p) => p.index < index),
     ...incoming,
     ...doc.paragraphs.filter((p) => p.index > index),
   ].map((p, i) => ({ ...p, index: i }));
-  const next = applyStats(doc, paragraphs);
   const edited = incoming.map((p) => p.text || p.excerpt).join("\n\n") !== (prior?.text || prior?.excerpt);
+  const current = { ...doc };
+  if (edited) {
+    delete current.paraphrase_review;
+    delete current.second_opinion_score;
+  }
+  const next = applyStats(current, paragraphs);
   if (edited && next.detection_scope && !next.detection_scope.note.includes("正文已在复核中修改")) {
     next.detection_scope = { ...next.detection_scope, note: next.detection_scope.note + " 正文已在复核中修改并重测；以上段落和字符数量记录原文件的选择范围，当前分数对应报告中的修改后正文。" };
   }

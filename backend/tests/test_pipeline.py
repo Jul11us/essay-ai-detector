@@ -43,7 +43,7 @@ def test_hard_split_preserves_word_boundary_for_writing_history(word_start, righ
 
     def score(text, _lang):
         scored.append(text)
-        return 0.95
+        return 0.50
 
     result = run_detect("en", raw, None, None, score)
     assert scored == [raw[:1200].strip(), raw[1200:].strip()]

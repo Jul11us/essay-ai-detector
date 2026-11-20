@@ -28,6 +28,17 @@ MODEL_SHA256 = {
     },
 }
 
+EN_REVIEW_MODEL_ID = "openai-community/roberta-base-openai-detector"
+EN_REVIEW_MODEL_COMMIT = "6cba99c003b711c7fe94f8a3aa2be35a792cb6fa"
+EN_REVIEW_MODEL_SHA256 = {
+    "config.json": "bd2b40605e167659786107548562d94a87a3cb50c084ccc386d7177ccfb1d268",
+    "tokenizer.json": "847bbeab6174d66a88898f729d52fa8d355fafe1bea101cf960dd404581df70e",
+    "tokenizer_config.json": "994f46754c5bf4014f1aa92d34b1374319c3a6b3f702105cd5b742beaecd18ce",
+    "merges.txt": "1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5",
+    "vocab.json": "9e7f63c2d15d666b52e21d250d2e513b87c9b713cfa6987a82ed89e5e6e50655",
+    "model.safetensors": "3abd6d2b005f5876b945cb5b68ddde04f6e28fbd9c5d6dc5adfb06ba647e0546",
+}
+
 
 def matches_sha256(path: Path, expected: str) -> bool:
     if not path.is_file():
@@ -37,9 +48,20 @@ def matches_sha256(path: Path, expected: str) -> bool:
 
 
 def verify_artifacts(path: Path, lang: str) -> None:
-    for name in ("tokenizer.json", "added_tokens.json"):
-        if name not in MODEL_SHA256[lang] and (path / name).is_file():
+    _verify_artifacts(path, MODEL_SHA256[lang], MODEL_COMMITS[lang])
+
+
+def verify_en_review_artifacts(path: Path) -> None:
+    _verify_artifacts(path, EN_REVIEW_MODEL_SHA256, EN_REVIEW_MODEL_COMMIT)
+    for name in ("special_tokens_map.json", "tokenizer.model", "spiece.model"):
+        if (path / name).is_file():
             raise RuntimeError(f"模型目录含非锁定分词文件：{name}")
-    for name, expected in MODEL_SHA256[lang].items():
+
+
+def _verify_artifacts(path: Path, hashes: dict[str, str], commit: str) -> None:
+    for name in ("tokenizer.json", "added_tokens.json"):
+        if name not in hashes and (path / name).is_file():
+            raise RuntimeError(f"模型目录含非锁定分词文件：{name}")
+    for name, expected in hashes.items():
         if not matches_sha256(path / name, expected):
-            raise RuntimeError(f"模型文件缺失或校验失败：{name}（版本 {MODEL_COMMITS[lang][:12]}）")
+            raise RuntimeError(f"模型文件缺失或校验失败：{name}（版本 {commit[:12]}）")
